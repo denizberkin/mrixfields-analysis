@@ -1,0 +1,68 @@
+# Claude instructions and local tooling config
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+.vscode/
+
+# Vendored upstream reference (obtainable from the challenge organizers)
+/official/
+
+# Internal notes, logs and working documents — not for the public repo
+/reports/
+/stuff/
+SUBMISSION_WORKFLOW.md
+SynthSegInfo.md
+*.docx
+*.xlsx
+*.xls
+*.doc
+*.pptx
+*.odt
+*.ods
+
+# Third-party reference notebook (re-downloadable from sander.ai)
+Diffusion_is_spectral_autoregression_Sander_Dieleman.ipynb
+
+# Local environment
+.env
+.conda/
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Model weights and checkpoints
+*.pt
+*.pth
+*.h5
+*.ckpt
+
+# Experiment tracking
+mlruns/
+mlflow.db
+runs/
+
+# LaTeX build artifacts
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+
+# Generated outputs (predictions, segmentations, visuals, packaged submissions)
+outputs/
+preds/
+preds_seg/
+submissions/
+*.nii
+*.nii.gz
+*.7z

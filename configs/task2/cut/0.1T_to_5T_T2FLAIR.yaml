@@ -1,0 +1,60 @@
+task: 2
+task_name: task2_0.1T_to_5T_T2FLAIR
+method: cut
+model:
+  input_nc: 1
+  output_nc: 1
+  ngf: 64
+  ndf: 64
+  n_blocks: 9
+  nce_layers:
+  - 0
+  - 4
+  - 8
+  - 12
+  - 16
+  nce_T: 0.07
+  num_patches: 256
+  lambda_GAN: 1.0
+  lambda_NCE: 1.0
+  nce_idt: true
+  gan_mode: lsgan
+  netF_nc: 256
+data:
+  source_field: 0.1T
+  target_field: 5T
+  modalities:
+  - T2FLAIR
+  crop_size: null
+  slice_axis: 2
+pretrain:
+  split: retro_train
+  batch_size: 8
+  num_workers: 4
+  lr: 0.0002
+  beta1: 0.5
+  beta2: 0.999
+  lr_policy: linear
+  n_epochs: 100
+  n_epochs_decay: 0
+  save_every: 10
+  print_every: 1000
+finetune:
+  split: pro_train
+  batch_size: 8
+  num_workers: 4
+  lr: 5.0e-05
+  beta1: 0.5
+  beta2: 0.999
+  epochs: 100
+  save_every: 10
+  pretrain_epoch: 100
+  loss_l1: 1.0
+  loss_lpips: 0.1
+  loss_ssim: 0.0
+  loss_edge: 0.0
+evaluation:
+  metrics:
+  - nrmse
+  - ssim
+  - lpips

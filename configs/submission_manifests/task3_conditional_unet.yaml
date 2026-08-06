@@ -1,0 +1,89 @@
+name: task3_conditional_unet_epoch10
+task: task3
+method: conditional_unet
+mode: pro_scratch
+epoch_tag: epoch10
+device: cuda:0
+seed: 0
+
+inference_command:
+  - /home/denizberkin/miniconda3/envs/mri/bin/python
+  - /home/denizberkin/projects/mri-fields/experiment-pipeline/scripts/inference_task3_conditional_unet.py
+  - --checkpoint
+  - "{checkpoint}"
+  - --input-dir
+  - "{input_dir}"
+  - --output-dir
+  - "{output_dir}"
+  - --modality
+  - "{modality}"
+  - --source
+  - "{source}"
+  - --target
+  - "{target}"
+  - --device
+  - "{device}"
+
+models:
+  - checkpoint: ../../task3_unet_finetune_10.pt
+    mappings:
+      - {modality: T1W, source: 0.1T, target: 1.5T}
+      - {modality: T1W, source: 0.1T, target: 3T}
+      - {modality: T1W, source: 0.1T, target: 5T}
+      - {modality: T1W, source: 0.1T, target: 7T}
+      - {modality: T1W, source: 1.5T, target: 0.1T}
+      - {modality: T1W, source: 1.5T, target: 3T}
+      - {modality: T1W, source: 1.5T, target: 5T}
+      - {modality: T1W, source: 1.5T, target: 7T}
+      - {modality: T1W, source: 3T, target: 0.1T}
+      - {modality: T1W, source: 3T, target: 1.5T}
+      - {modality: T1W, source: 3T, target: 5T}
+      - {modality: T1W, source: 3T, target: 7T}
+      - {modality: T1W, source: 5T, target: 0.1T}
+      - {modality: T1W, source: 5T, target: 1.5T}
+      - {modality: T1W, source: 5T, target: 3T}
+      - {modality: T1W, source: 5T, target: 7T}
+      - {modality: T1W, source: 7T, target: 0.1T}
+      - {modality: T1W, source: 7T, target: 1.5T}
+      - {modality: T1W, source: 7T, target: 3T}
+      - {modality: T1W, source: 7T, target: 5T}
+      - {modality: T2W, source: 0.1T, target: 1.5T}
+      - {modality: T2W, source: 0.1T, target: 3T}
+      - {modality: T2W, source: 0.1T, target: 5T}
+      - {modality: T2W, source: 0.1T, target: 7T}
+      - {modality: T2W, source: 1.5T, target: 0.1T}
+      - {modality: T2W, source: 1.5T, target: 3T}
+      - {modality: T2W, source: 1.5T, target: 5T}
+      - {modality: T2W, source: 1.5T, target: 7T}
+      - {modality: T2W, source: 3T, target: 0.1T}
+      - {modality: T2W, source: 3T, target: 1.5T}
+      - {modality: T2W, source: 3T, target: 5T}
+      - {modality: T2W, source: 3T, target: 7T}
+      - {modality: T2W, source: 5T, target: 0.1T}
+      - {modality: T2W, source: 5T, target: 1.5T}
+      - {modality: T2W, source: 5T, target: 3T}
+      - {modality: T2W, source: 5T, target: 7T}
+      - {modality: T2W, source: 7T, target: 0.1T}
+      - {modality: T2W, source: 7T, target: 1.5T}
+      - {modality: T2W, source: 7T, target: 3T}
+      - {modality: T2W, source: 7T, target: 5T}
+      - {modality: T2FLAIR, source: 0.1T, target: 1.5T}
+      - {modality: T2FLAIR, source: 0.1T, target: 3T}
+      - {modality: T2FLAIR, source: 0.1T, target: 5T}
+      - {modality: T2FLAIR, source: 0.1T, target: 7T}
+      - {modality: T2FLAIR, source: 1.5T, target: 0.1T}
+      - {modality: T2FLAIR, source: 1.5T, target: 3T}
+      - {modality: T2FLAIR, source: 1.5T, target: 5T}
+      - {modality: T2FLAIR, source: 1.5T, target: 7T}
+      - {modality: T2FLAIR, source: 3T, target: 0.1T}
+      - {modality: T2FLAIR, source: 3T, target: 1.5T}
+      - {modality: T2FLAIR, source: 3T, target: 5T}
+      - {modality: T2FLAIR, source: 3T, target: 7T}
+      - {modality: T2FLAIR, source: 5T, target: 0.1T}
+      - {modality: T2FLAIR, source: 5T, target: 1.5T}
+      - {modality: T2FLAIR, source: 5T, target: 3T}
+      - {modality: T2FLAIR, source: 5T, target: 7T}
+      - {modality: T2FLAIR, source: 7T, target: 0.1T}
+      - {modality: T2FLAIR, source: 7T, target: 1.5T}
+      - {modality: T2FLAIR, source: 7T, target: 3T}
+      - {modality: T2FLAIR, source: 7T, target: 5T}

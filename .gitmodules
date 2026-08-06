@@ -1,0 +1,6 @@
+[submodule "SynthSeg"]
+	path = SynthSeg
+	url = https://github.com/denizberkin/SynthSeg.git
+[submodule "experiment-pipeline"]
+	path = experiment-pipeline
+	url = https://github.com/denizberkin/experiment-pipeline.git

@@ -1,0 +1,58 @@
+# Required run-level parameters.
+name: task2_cyclegan_example
+task: task2                 # task1 | task2 | task3
+method: cyclegan            # Baselines: task1/2 cut|cyclegan; task3 stargan_v2
+
+# Optional run-level parameters.
+mode: pro_pretrained
+epoch_tag: epoch100
+device: cuda:0
+seed: 0
+
+# To use any other model, choose any filesystem-safe method name and provide a
+# command adapter. It runs once per mapping and must write challenge-named
+# NIfTI files to {output_dir}. See submission_manifests/README.md.
+# inference_command:
+#   - python
+#   - /path/to/your/predict.py
+#   - --checkpoint
+#   - "{checkpoint}"
+#   - --input-dir
+#   - "{input_dir}"
+#   - --output-dir
+#   - "{output_dir}"
+#   - --target
+#   - "{target}"
+
+# Optional path overrides. Defaults come from .env and are isolated below
+# <root>/<name>/ so different methods/runs cannot be mixed.
+# paths:
+#   predictions: /custom/predictions/root
+#   segmentations: /custom/segmentations/root
+#   submissions: /custom/submissions/root
+#   synthseg: /custom/SynthSeg
+
+# Each model maps one checkpoint to one or more inference mappings.
+# `config` is optional: Task 1/2 configs are derived from the mapping, while
+# Task 3 defaults to any_to_any_all_modalities.yaml.
+models:
+  - checkpoint: /path/to/task2_0.1T_to_1.5T_T1W/cyclegan/pro_pretrained/weights/checkpoint_epoch100.pth
+    mappings:
+      - modality: T1W
+        source: 0.1T
+        target: 1.5T
+
+  - checkpoint: /path/to/task2_0.1T_to_3T_T1W/cyclegan/pro_pretrained/weights/checkpoint_epoch100.pth
+    mappings:
+      - modality: T1W
+        source: 0.1T
+        target: 3T
+
+# A unified Task 3 model is represented by one model item with many mappings:
+# models:
+#   - checkpoint: /path/to/task3_checkpoint.pth
+#     config: ../official/MRIxFields2026/Baseline/configs/task3/stargan/any_to_any_all_modalities.yaml
+#     mappings:
+#       - {modality: T1W, source: 0.1T, target: 1.5T}
+#       - {modality: T1W, source: 0.1T, target: 3T}
+#       - {modality: T2W, source: 7T, target: 0.1T}

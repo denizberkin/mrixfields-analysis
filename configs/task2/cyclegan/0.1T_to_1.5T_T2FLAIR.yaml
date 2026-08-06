@@ -1,0 +1,50 @@
+task: 2
+task_name: task2_0.1T_to_1.5T_T2FLAIR
+method: cyclegan
+model:
+  input_nc: 1
+  output_nc: 1
+  ngf: 64
+  ndf: 64
+  n_blocks: 9
+  lambda_cycle: 10.0
+  lambda_idt: 0.5
+  pool_size: 50
+  gan_mode: lsgan
+data:
+  source_field: 0.1T
+  target_field: 1.5T
+  modalities:
+  - T2FLAIR
+  crop_size: null
+  slice_axis: 2
+pretrain:
+  split: retro_train
+  batch_size: 8
+  num_workers: 4
+  lr: 0.0002
+  beta1: 0.5
+  lr_policy: linear
+  n_epochs: 100
+  n_epochs_decay: 0
+  save_every: 10
+  print_every: 1000
+finetune:
+  split: pro_train
+  batch_size: 8
+  num_workers: 4
+  lr: 5.0e-05
+  beta1: 0.5
+  beta2: 0.999
+  epochs: 100
+  save_every: 10
+  pretrain_epoch: 100
+  loss_l1: 1.0
+  loss_lpips: 0.1
+  loss_ssim: 0.0
+  loss_edge: 0.0
+evaluation:
+  metrics:
+  - nrmse
+  - ssim
+  - lpips
