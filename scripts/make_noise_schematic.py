@@ -2,10 +2,11 @@
 Draw schematic of white noise masking a power-law spectrum.
 
 Redrawn after Dieleman, "Diffusion is spectral autoregression", as vector output sized for slides. 
-Carries no data, only a diagram, so nothing here reads from outputs/spectral/.
+Carries no data, only a diagram, so nothing here reads from the spectral data. Output is a tracked
+report asset, so it is written straight into reports/spectral/.
 
 Usage:
-    python scripts/make_noise_schematic.py --out-dir outputs/spectral/figures
+    python scripts/make_noise_schematic.py --out-dir reports/spectral
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ SIGNAL_COLOUR = "#CF2E2E"
 NOISE_COLOUR = "#2B3FD4"
 SUM_COLOUR = "#2F6B3A"
 
-# Straight lines in log--log space: the signal falls, the noise floor is flat.
+# Straight lines in log-log space: the signal falls, the noise floor is flat.
 SIGNAL_START, SIGNAL_END = 0.93, 0.06
 NOISE_LOW, NOISE_HIGH = 0.30, 0.58
 PANELS = ("natural image", "Gaussian noise", "noisy image", "very noisy image")
@@ -58,7 +59,7 @@ def frame(axis) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out-dir", type=Path, default=Path("outputs/spectral/figures"))
+    parser.add_argument("--out-dir", type=Path, default=Path("reports/spectral"))
     args = parser.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -76,11 +77,11 @@ def main() -> int:
     axes[0].plot(x, signal(x), color=SIGNAL_COLOUR, linewidth=2.2)
     axes[0].set_ylabel("power\n(log scale)")
 
-    # Panel 2: white noise alone -- flat.
+    # Panel 2: white noise alone - flat.
     axes[1].plot(x, np.full_like(x, NOISE_LOW), color=NOISE_COLOUR, linewidth=2.2)
 
     # Panels 3 and 4: signal plus noise. Adding in linear power space looks, on a log axis, like
-    # taking the larger of the two -- the knee sits where they cross.
+    # taking the larger of the two - the knee sits where they cross.
     for axis, floor in ((axes[2], NOISE_LOW), (axes[3], NOISE_HIGH)):
         axis.plot(x, signal(x), color=SIGNAL_COLOUR, linewidth=1.6, alpha=0.22)
         axis.plot(x, np.full_like(x, floor), color=NOISE_COLOUR, linewidth=1.6, alpha=0.22)

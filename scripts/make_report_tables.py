@@ -1,10 +1,10 @@
 """Emit LaTeX tables for the progress report from the spectral analysis output.
 
-Keeps the reported numbers tied to ``outputs/spectral/alpha_summary.csv`` rather than transcribed by
+Keeps the reported numbers tied to ``reports/spectral/alpha_summary.csv`` rather than transcribed by
 hand, so re-running the analysis updates the report.
 
 Usage:
-    python scripts/make_report_tables.py --in-dir outputs/spectral --out-dir reports/tables
+    python scripts/make_report_tables.py --in-dir reports/spectral --out-dir reports/tables
 """
 
 from __future__ import annotations
@@ -131,7 +131,7 @@ def summary_macros(rows: list[dict[str, str]], split: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--in-dir", type=Path, default=Path("outputs/spectral"))
+    parser.add_argument("--in-dir", type=Path, default=Path("reports/spectral"))
     parser.add_argument("--out-dir", type=Path, default=Path("reports/tables"))
     args = parser.parse_args()
 

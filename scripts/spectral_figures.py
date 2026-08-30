@@ -5,7 +5,7 @@ the progress report. Also renders the noise/diffusion figures, which are derived
 mean spectrum rather than from the raw volumes.
 
 Usage:
-    python scripts/spectral_figures.py --in-dir outputs/spectral --out-dir outputs/spectral/figures
+    python scripts/spectral_figures.py --in-dir reports/spectral --out-dir reports/spectral
 """
 
 from __future__ import annotations
@@ -81,8 +81,7 @@ def cell_mean(data: dict, split: str, modality: str, field: str) -> np.ndarray |
 
 
 def save(fig: plt.Figure, out_dir: Path, name: str) -> None:
-    for suffix in ("pdf", "png"):
-        fig.savefig(out_dir / f"{name}.{suffix}")
+    fig.savefig(out_dir / f"{name}.pdf")
     plt.close(fig)
     print(f"  wrote {name}.pdf", flush=True)
 
@@ -302,8 +301,8 @@ def figure_field_gap(data: dict, out_dir: Path, split: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--in-dir", type=Path, default=Path("outputs/spectral"))
-    parser.add_argument("--out-dir", type=Path, default=Path("outputs/spectral/figures"))
+    parser.add_argument("--in-dir", type=Path, default=Path("reports/spectral"))
+    parser.add_argument("--out-dir", type=Path, default=Path("reports/spectral"))
     parser.add_argument("--split", default="retro", help="split to draw the aggregate figures from")
     args = parser.parse_args()
 
@@ -313,7 +312,10 @@ def main() -> int:
     split = args.split if args.split in available else sorted(available)[0]
     print(f"drawing figures from split '{split}' (available: {sorted(available)})", flush=True)
 
-    figure_spectrum_panels(args.out_dir)
+    try:
+        figure_spectrum_panels(args.out_dir)
+    except (RuntimeError, OSError, IndexError) as error:
+        print(f"  skip fig_spectrum_panels, needs the raw dataset: {error}", flush=True)
     figure_rapsd_by_field(data, args.out_dir, split)
     figure_powerlaw_fit(data, args.out_dir, split)
     figure_alpha_by_field(data, args.out_dir, split)

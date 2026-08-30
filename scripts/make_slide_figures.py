@@ -3,7 +3,7 @@ Render the bar charts used by reports/progress_slides_2.tex
 
 The numbers are constants of the reports, not recomputed here: 
 - control case and Task 3 rows:     Baseline Experiment Logs excel, 
-- spectral exponents:               outputs/spectral/alpha_summary.csv
+- spectral exponents:               reports/spectral/alpha_summary.csv
 - diversity ratios from the synthetic generator validation reported
 reports/progress_report_2.tex.
 

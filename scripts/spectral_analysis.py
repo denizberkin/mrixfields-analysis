@@ -7,7 +7,7 @@ regression in log-log space.
 Reference: https://sander.ai/2024/09/02/spectral-autoregression.html
 
 Usage:
-    python scripts/spectral_analysis.py --splits val retro --out-dir outputs/spectral
+    python scripts/spectral_analysis.py --splits val retro --out-dir reports/spectral
 """
 
 from __future__ import annotations
@@ -204,7 +204,7 @@ def main() -> int:
     parser.add_argument("--splits", nargs="+", default=["val"], choices=sorted(SPLIT_DIRS))
     parser.add_argument("--max-volumes", type=int, default=30, help="max volumes sampled per cell")
     parser.add_argument("--slices-per-volume", type=int, default=12)
-    parser.add_argument("--out-dir", type=Path, default=Path("outputs/spectral"))
+    parser.add_argument("--out-dir", type=Path, default=Path("reports/spectral"))
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
