@@ -8,7 +8,6 @@ CLAUDE.local.md
 /official/
 
 # Internal notes, logs and working documents — not for the public repo
-/reports/
 /stuff/
 SUBMISSION_WORKFLOW.md
 SynthSegInfo.md
@@ -20,7 +19,7 @@ SynthSegInfo.md
 *.odt
 *.ods
 
-# Third-party reference notebook (re-downloadable from sander.ai)
+# Third party reference notebook (re-downloadable from sander.ai)
 Diffusion_is_spectral_autoregression_Sander_Dieleman.ipynb
 
 # Local environment
@@ -67,3 +66,14 @@ submissions/
 *.nii
 *.nii.gz
 *.7z
+
+# Report sources. The .tex, the figures they include and the tables they \input are
+# tracked so reports/ builds from a clean clone; compiled PDFs, speaker notes and
+# LaTeX build junk stay out. Must sit after the global *.png rule above to win.
+/reports/*
+!/reports/*.tex
+!/reports/figures/
+!/reports/spectral/
+!/reports/tables/
+!/reports/visuals/
+!/reports/**/*.png
