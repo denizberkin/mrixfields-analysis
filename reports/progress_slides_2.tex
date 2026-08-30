@@ -55,7 +55,7 @@
 \begin{document}
 
 \begin{frame}
-  \titlepage
+  \titlepage%
 \end{frame}
 
 % ============================================================ CHALLENGE =====
@@ -73,9 +73,9 @@
   \end{tikzpicture}
 
   \vspace{1.4em}
-  \raggedright
+  \raggedright%
   \begin{airy}
-    \item Translate brain MRI between field strengths. Three contrasts: T1W, T2W, T2FLAIR.
+    \item Translate brain MRI between field strengths. Three contrasts: T1W, T2W, T2 FLAIR.\@
     \item 2500$+$ unpaired retrospective cases, 600 paired prospective cases, multi-centre.
   \end{airy}
 \end{frame}
@@ -119,10 +119,11 @@
         \foreach \t in {1,...,4}
           \draw[accent!30, line width=0.25pt] (c\s) -- (d\t);
     \end{scope}
-  \end{tikzpicture}}
+  \end{tikzpicture}
+}
 
   \vspace{1.6em}
-  \raggedright
+  \raggedright%
   \small
   \begin{tabular}{@{}lll@{}}
     \toprule
@@ -171,7 +172,7 @@
   \includegraphics[width=\linewidth]{figures/slide_control_case.pdf}
 
   \vspace{0.6em}
-  \raggedright
+  \raggedright%
   \gloss{The control group returns the input volume unchanged. It is within noise of both trained
   baselines on SSIM, LPIPS, Dice and volume consistency, only losing on nRMSE, indicating a lack of performance.}
 \end{frame}
@@ -184,7 +185,7 @@
   \includegraphics[width=0.86\linewidth]{figures/slide_delta_alpha.pdf}
 
   \vspace{0.4em}
-  \raggedright
+  \raggedright%
   \gloss{Power spectra follow $P(f) \propto f^{-\alpha}$. $\Delta\alpha = \alpha_{\text{source}} -
   \alpha_{7\,\mathrm{T}}$ is the HF deficit the model must close. \\
   It is substantial at 0.1\,T and near zero or negative elsewhere.}
@@ -255,7 +256,7 @@
   \includegraphics[height=0.68\textheight]{figures/slide_lejepa_loss.png}
 
   \vspace{0.2em}
-  \raggedright
+  \raggedright%
   \gloss{42k optimizer steps. Both terms flatten with no zero collapse.}
 \end{frame}
 
@@ -281,7 +282,7 @@
   \end{tikzpicture}
 
   \vspace{1.2em}
-  \raggedright
+  \raggedright%
   \begin{airy}
     \item Pairing exact: same anatomy, same grid.
     \item Tissue-specific remap (CSF/GM/WM), not a single global shift.
@@ -297,7 +298,7 @@
   \includegraphics[width=\linewidth]{figures/synth_example_slices.png}
 
   \vspace{1.0em}
-  \raggedright
+  \raggedright%
   \gloss{One axial slice, same subject. Anatomy aimed to be preserved by construction; \\
   contrast, sharpness and noise vary.}
 \end{frame}
@@ -310,7 +311,7 @@
   \includegraphics[height=0.68\textheight]{figures/synth_tissue_histograms.png}
 
   \vspace{0.2em}
-  \raggedright
+  \raggedright%
   \gloss{Black: real. Orange: initial generator. Green: corrected generator.}
 \end{frame}
 
@@ -322,7 +323,7 @@
   \includegraphics[width=0.80\linewidth]{figures/slide_diversity.pdf}
 
   \vspace{0.4em}
-  \raggedright
+  \raggedright%
   \gloss{Ratio of synthetic to real standard deviation of tissue means across volumes; bars are the
   mean over CSF, GM and WM, whiskers the range. The initial generator pushed every sample toward one
   average profile per field. The corrected generator varies the target profile per sample. 1.5\,T
@@ -358,10 +359,11 @@
     \node[b, fill=black!5, minimum width=14mm] (a2) at (13.6,0.9) {attend\\within band};
     \foreach \t in {t1,t2,t3} { \draw[->] (f2) -- (\t); \draw[->] (\t) -- (a2); }
     \node[font=\scriptsize, align=center] at (10.6,-0.5) {loss stays plain $L_1$};
-  \end{tikzpicture}}
+  \end{tikzpicture}%
+  }
 
   \vspace{1.2em}
-  \raggedright
+  \raggedright%
   \gloss{Similar ideas, different approaches. Measured $\Delta\alpha$ is the quantity UniField's band
   weights approximate by hand. \\
   It changes sign above 1.5\,T, so a single fixed weighting seems not appropriate.}
@@ -375,10 +377,10 @@
   \includegraphics[width=0.86\linewidth]{figures/slide_task3.pdf}
 
   \vspace{0.4em}
-  \raggedright
+  \raggedright%
   \gloss{All modality-averaged. The control group is the unmodified input, scored on the platform. \\
   On LPIPS all three trained models sit within 0.003 of it, and FPS-Former improves on it by 0.0011. \\
-  Control group also beats the challenge baseline on SSIM. Only the conditional U-Net separates itself on
+  Control group also beats the challenge baseline on SSIM.\@ Only the conditional U-Net separates itself on
   every metric.}
 \end{frame}
 
@@ -390,7 +392,7 @@
   \includegraphics[height=0.66\textheight]{figures/slide_task3_sweep.pdf}
 
   \vspace{0.2em}
-  \raggedright
+  \raggedright%
   \gloss{Same subject and slice throughout; last column is the 7\,T. 
   In-sample: this subject is in the paired split the checkpoint was fine-tuned on.}
 \end{frame}
@@ -403,7 +405,7 @@
   \includegraphics[height=0.64\textheight]{figures/slide_task3_gt.pdf}
 
   \vspace{0.2em}
-  \raggedright
+  \raggedright%
   \gloss{Transition with the largest $\Delta\alpha$. Error is structured on
   edges and vessels rather than spread over tissue, which is what a loss of fine detail looks like.
   In-sample, as above.}
@@ -457,7 +459,7 @@
   \end{tikzpicture}
 
   \vspace{1.2em}
-  \raggedright
+  \raggedright%
   \begin{airy}
     \item $B - A$: value of the encoder alone. \quad $C - A$: value of the synthetic data alone.
     \item $D - C$ against $B - A$: does the encoder still help once synthetic pretraining is in place?
@@ -475,9 +477,9 @@
     \item \textbf{Band-weighted loss.} Spectral term on the same U-Net, per-band weights derived from
     the measured $\Delta\alpha$, conditioned on the transition.
     \item \textbf{Reconsider conditioning.} Currently adding domain embedding at the bottleneck only;
-    source--target difference lives at fine scales. \\
+    source-target difference lives at fine scales. \\
     Considering a modulation scheme that can act at multiple layers of size.
-    \item \textbf{FPS-Former, schedule matched} to the U-Net --- or dropped.
+    \item \textbf{FPS-Former, schedule matched} to the U-Net, or dropped.
   \end{airy}
 
   \vspace{1.0em}
