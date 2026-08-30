@@ -1,0 +1,308 @@
+{
+  "fit_band": [
+    0.02,
+    0.2
+  ],
+  "rows": [
+    {
+      "split": "val",
+      "modality": "T1W",
+      "field": "0.1T",
+      "num_volumes": 3,
+      "alpha": 4.4484,
+      "ci_low": 4.1933,
+      "ci_high": 4.6119,
+      "rms_residual": 0.3288
+    },
+    {
+      "split": "val",
+      "modality": "T1W",
+      "field": "1.5T",
+      "num_volumes": 3,
+      "alpha": 3.5543,
+      "ci_low": 3.5465,
+      "ci_high": 3.5595,
+      "rms_residual": 0.2643
+    },
+    {
+      "split": "val",
+      "modality": "T1W",
+      "field": "3T",
+      "num_volumes": 3,
+      "alpha": 3.2634,
+      "ci_low": 3.2224,
+      "ci_high": 3.3201,
+      "rms_residual": 0.1944
+    },
+    {
+      "split": "val",
+      "modality": "T1W",
+      "field": "5T",
+      "num_volumes": 3,
+      "alpha": 2.8832,
+      "ci_low": 2.8737,
+      "ci_high": 2.9014,
+      "rms_residual": 0.1473
+    },
+    {
+      "split": "val",
+      "modality": "T1W",
+      "field": "7T",
+      "num_volumes": 3,
+      "alpha": 3.3378,
+      "ci_low": 3.2431,
+      "ci_high": 3.4812,
+      "rms_residual": 0.3105
+    },
+    {
+      "split": "val",
+      "modality": "T2W",
+      "field": "0.1T",
+      "num_volumes": 3,
+      "alpha": 3.994,
+      "ci_low": 3.8507,
+      "ci_high": 4.1398,
+      "rms_residual": 0.347
+    },
+    {
+      "split": "val",
+      "modality": "T2W",
+      "field": "1.5T",
+      "num_volumes": 3,
+      "alpha": 3.1158,
+      "ci_low": 3.0456,
+      "ci_high": 3.1877,
+      "rms_residual": 0.2038
+    },
+    {
+      "split": "val",
+      "modality": "T2W",
+      "field": "3T",
+      "num_volumes": 3,
+      "alpha": 2.9052,
+      "ci_low": 2.7563,
+      "ci_high": 3.1173,
+      "rms_residual": 0.21
+    },
+    {
+      "split": "val",
+      "modality": "T2W",
+      "field": "5T",
+      "num_volumes": 3,
+      "alpha": 2.7457,
+      "ci_low": 2.7078,
+      "ci_high": 2.7699,
+      "rms_residual": 0.1902
+    },
+    {
+      "split": "val",
+      "modality": "T2W",
+      "field": "7T",
+      "num_volumes": 3,
+      "alpha": 3.0338,
+      "ci_low": 3.0163,
+      "ci_high": 3.0678,
+      "rms_residual": 0.2187
+    },
+    {
+      "split": "val",
+      "modality": "T2FLAIR",
+      "field": "0.1T",
+      "num_volumes": 3,
+      "alpha": 3.7029,
+      "ci_low": 3.5464,
+      "ci_high": 3.8005,
+      "rms_residual": 0.1607
+    },
+    {
+      "split": "val",
+      "modality": "T2FLAIR",
+      "field": "1.5T",
+      "num_volumes": 3,
+      "alpha": 3.3177,
+      "ci_low": 3.3017,
+      "ci_high": 3.3342,
+      "rms_residual": 0.1982
+    },
+    {
+      "split": "val",
+      "modality": "T2FLAIR",
+      "field": "3T",
+      "num_volumes": 3,
+      "alpha": 3.2523,
+      "ci_low": 3.2138,
+      "ci_high": 3.2734,
+      "rms_residual": 0.2193
+    },
+    {
+      "split": "val",
+      "modality": "T2FLAIR",
+      "field": "5T",
+      "num_volumes": 3,
+      "alpha": 3.1216,
+      "ci_low": 3.0893,
+      "ci_high": 3.156,
+      "rms_residual": 0.1091
+    },
+    {
+      "split": "val",
+      "modality": "T2FLAIR",
+      "field": "7T",
+      "num_volumes": 3,
+      "alpha": 3.3353,
+      "ci_low": 3.3255,
+      "ci_high": 3.3466,
+      "rms_residual": 0.22
+    },
+    {
+      "split": "retro",
+      "modality": "T1W",
+      "field": "0.1T",
+      "num_volumes": 30,
+      "alpha": 4.3166,
+      "ci_low": 4.2512,
+      "ci_high": 4.3849,
+      "rms_residual": 0.2486
+    },
+    {
+      "split": "retro",
+      "modality": "T1W",
+      "field": "1.5T",
+      "num_volumes": 30,
+      "alpha": 3.466,
+      "ci_low": 3.438,
+      "ci_high": 3.494,
+      "rms_residual": 0.2085
+    },
+    {
+      "split": "retro",
+      "modality": "T1W",
+      "field": "3T",
+      "num_volumes": 30,
+      "alpha": 3.1368,
+      "ci_low": 3.1174,
+      "ci_high": 3.1574,
+      "rms_residual": 0.2289
+    },
+    {
+      "split": "retro",
+      "modality": "T1W",
+      "field": "5T",
+      "num_volumes": 30,
+      "alpha": 2.8029,
+      "ci_low": 2.7729,
+      "ci_high": 2.8298,
+      "rms_residual": 0.1192
+    },
+    {
+      "split": "retro",
+      "modality": "T1W",
+      "field": "7T",
+      "num_volumes": 30,
+      "alpha": 3.308,
+      "ci_low": 3.2815,
+      "ci_high": 3.3351,
+      "rms_residual": 0.327
+    },
+    {
+      "split": "retro",
+      "modality": "T2W",
+      "field": "0.1T",
+      "num_volumes": 30,
+      "alpha": 4.1634,
+      "ci_low": 4.1205,
+      "ci_high": 4.2061,
+      "rms_residual": 0.2795
+    },
+    {
+      "split": "retro",
+      "modality": "T2W",
+      "field": "1.5T",
+      "num_volumes": 30,
+      "alpha": 2.7615,
+      "ci_low": 2.7481,
+      "ci_high": 2.7741,
+      "rms_residual": 0.0949
+    },
+    {
+      "split": "retro",
+      "modality": "T2W",
+      "field": "3T",
+      "num_volumes": 30,
+      "alpha": 2.6014,
+      "ci_low": 2.5769,
+      "ci_high": 2.6289,
+      "rms_residual": 0.1866
+    },
+    {
+      "split": "retro",
+      "modality": "T2W",
+      "field": "5T",
+      "num_volumes": 30,
+      "alpha": 2.447,
+      "ci_low": 2.4094,
+      "ci_high": 2.4847,
+      "rms_residual": 0.1027
+    },
+    {
+      "split": "retro",
+      "modality": "T2W",
+      "field": "7T",
+      "num_volumes": 30,
+      "alpha": 2.6614,
+      "ci_low": 2.6414,
+      "ci_high": 2.6822,
+      "rms_residual": 0.1186
+    },
+    {
+      "split": "retro",
+      "modality": "T2FLAIR",
+      "field": "0.1T",
+      "num_volumes": 30,
+      "alpha": 3.9872,
+      "ci_low": 3.9307,
+      "ci_high": 4.043,
+      "rms_residual": 0.2533
+    },
+    {
+      "split": "retro",
+      "modality": "T2FLAIR",
+      "field": "1.5T",
+      "num_volumes": 30,
+      "alpha": 3.043,
+      "ci_low": 3.0225,
+      "ci_high": 3.0633,
+      "rms_residual": 0.1397
+    },
+    {
+      "split": "retro",
+      "modality": "T2FLAIR",
+      "field": "3T",
+      "num_volumes": 30,
+      "alpha": 3.0376,
+      "ci_low": 3.0146,
+      "ci_high": 3.0627,
+      "rms_residual": 0.3011
+    },
+    {
+      "split": "retro",
+      "modality": "T2FLAIR",
+      "field": "5T",
+      "num_volumes": 30,
+      "alpha": 2.8756,
+      "ci_low": 2.8507,
+      "ci_high": 2.9009,
+      "rms_residual": 0.0556
+    },
+    {
+      "split": "retro",
+      "modality": "T2FLAIR",
+      "field": "7T",
+      "num_volumes": 30,
+      "alpha": 2.6935,
+      "ci_low": 2.6758,
+      "ci_high": 2.7125,
+      "rms_residual": 0.1472
+    }
+  ]
+}
