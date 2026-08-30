@@ -43,6 +43,7 @@ dist/
 *.pth
 *.h5
 *.ckpt
+*.png
 
 # Experiment tracking
 mlruns/
