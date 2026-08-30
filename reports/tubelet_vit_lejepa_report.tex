@@ -1,0 +1,283 @@
+\documentclass[10pt]{article}
+
+\usepackage[letterpaper,margin=0.67in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+\setlist{nosep,leftmargin=1.25em}
+\setcounter{secnumdepth}{2}
+\renewcommand{\baselinestretch}{0.96}
+\newcommand{\R}{\mathbb{R}}
+
+\title{\vspace{-1.7em}\textbf{Tubelet-ViT LeJEPA for Volumetric Brain MRI Pretraining}}
+\author{MRIxFields2026 Group Project}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-2.2em}
+
+\begin{abstract}
+This report presents a volumetric adaptation of LeJEPA for representation
+learning from cross-field brain MRI. Instead of encoding axial slices
+independently, the method constructs related views of a 16-slice anatomical
+slab and tokenizes them with a three-dimensional tubelet embedding. A single
+ViT-B encoder maps all views to projected CLS representations trained with
+LeJEPA's global-center invariance objective and Sketched Isotropic Gaussian
+Regularization (SIGReg). The resulting artifact is an encoder, not a complete
+image translator: its dense three-dimensional patch tokens are intended to
+initialize a later conditional MRI synthesis model. The design therefore
+preserves the simplicity of LeJEPA while explicitly monitoring the unresolved
+gap between pooled self-supervision and dense anatomical transfer.
+\end{abstract}
+
+\section{Motivation and Scope}
+
+MRIxFields2026 studies synthesis between five magnetic field strengths and
+three structural MRI modalities \cite{mrixfields}. The preceding project
+experiment applied LeJEPA to individual axial slices. Although this provided a
+controlled two-dimensional baseline, a slice-wise encoder cannot directly use
+through-plane continuity, and its patch features were only indirectly trained
+through a pooled CLS loss. The present method changes the input representation
+and encoder while retaining the established LeJEPA objective.
+
+LeJEPA combines agreement between related views with a distributional
+regularizer that prevents complete and dimensional collapse without a target
+network, exponential moving average (EMA), stop-gradient, or contrastive
+negatives \cite{lejepa}. This simplicity is the main reason for retaining it.
+Tubelet tokenization does not turn the method into V-JEPA: V-JEPA and EchoJEPA
+use masked latent prediction with a context encoder, predictor, and EMA target
+encoder \cite{vjepa,echojepa}, whereas the selected method remains an
+unmasked, view-based LeJEPA model.
+
+The scope is volumetric self-supervised pretraining and encoder export. Field
+and modality labels are used for balanced sampling and reporting, but no
+source-field, target-field, or modality conditioning is introduced during
+self-supervision. Cross-field control belongs to the downstream translator,
+where a target field is well defined.
+
+\section{Volumetric Multi-View Formulation}
+
+Let a base sample be a contiguous axial slab
+\begin{equation}
+  s_n=[x_z,x_{z+1},\ldots,x_{z+15}]
+  \in [0,1]^{1\times16\times H\times W}.
+\end{equation}
+All related views retain the same subject, field strength, modality, and
+anatomical neighborhood. Two global views have shape
+$1\times16\times224\times224$. Six local views use contiguous 8-slice
+sub-slabs and have shape $1\times8\times96\times96$. Their depth offsets are
+distinct, and each local sub-slab contains the common anchor anatomy needed by
+the intended center-slice consumer.
+
+LeJEPA supplies the two-global and multi-local alignment structure
+\cite{lejepa}. EchoJEPA provides a medical-video precedent for 16-frame inputs,
+tubelet depth 2, patch size 16, global crop scale $[0.5,1.0]$, and aspect ratio
+$[0.9,1.1]$ chosen to avoid distorting clinically meaningful geometry
+\cite{echojepa}. Our local scale $[0.1,0.3]$, foreground-aware overlap, shared
+anchor coordinate, and anchor-containing depth windows are MRI-specific
+project choices rather than claims about those papers.
+
+Each view samples one crop and affine transform and applies it coherently to
+every slice. Small rotations, translations, mild blur, and mild Gaussian noise
+are allowed. Natural-image color jitter, grayscale conversion, solarization,
+large rotations, and aggressive contrast changes are excluded because field
+strength and modality appearance are part of the later translation signal.
+
+\newpage
+
+\section{Tubelet-ViT LeJEPA}
+
+\subsection{Tubelet encoder}
+
+The encoder begins with a non-overlapping three-dimensional convolution:
+\begin{equation}
+  \mathcal{P}(X)=\operatorname{Conv3D}_{k=s=(2,16,16)}(X),
+  \qquad C_{\mathrm{out}}=768.
+\end{equation}
+For a global view this gives
+\begin{equation}
+  X^{(g)}\in\R^{B\times1\times16\times224\times224}
+  \longrightarrow
+  T^{(g)}\in\R^{B\times8\times14\times14\times768},
+\end{equation}
+or 1,568 patch tokens per view. A local view produces a
+$4\times6\times6$ grid, or 144 tokens. AV-JEPA is the closest direct
+architectural precedent: it tokenizes 16 video frames using a
+$2\times16\times16$ Conv3D stem and feeds the resulting 1,568 tokens to a
+shared ViT-B \cite{avjepa}. VideoMAE and V-JEPA provide the broader
+space-time tubelet lineage \cite{videomae,vjepa}. Our adaptation changes RGB
+video to one-channel MRI and interprets the temporal dimension as ordered
+anatomical depth.
+
+A learned CLS token is prepended before a standard bidirectional ViT-B with 12
+blocks, hidden width 768, 12 attention heads, and MLP ratio 4
+\cite{vit}. The global $8\times14\times14$ grid has a learned absolute
+three-dimensional positional table. Patch positions are trilinearly
+interpolated for local and downstream grids while the CLS position remains
+separate. The same tubelet stem, transformer, and final LayerNorm process every
+view.
+
+For view $v$ of sample $n$, the training representation is
+\begin{equation}
+  h_{n,v}=f_{\theta}(v_{n,v})_{\mathrm{CLS}},\qquad
+  z_{n,v}=g_{\phi}(h_{n,v})\in\R^{128},
+\end{equation}
+where $g_{\phi}$ is a shared BatchNorm MLP with dimensions
+$768\rightarrow2048\rightarrow2048\rightarrow128$. Only the projected CLS
+enters the SSL loss. Dense post-LayerNorm patch tokens remain available from
+$f_{\theta}$ for transfer.
+
+\subsection{Global-center invariance and SIGReg}
+
+Let $V_g=2$ be the number of global views and $V=8$ the total number of views.
+The target for sample $n$ is the mean of its global projections:
+\begin{equation}
+  \mu_n=\frac{1}{V_g}\sum_{v=1}^{V_g}z_{n,v}.
+\end{equation}
+All views predict this center through
+\begin{equation}
+  \mathcal{L}_{\mathrm{inv}}
+  =\frac{1}{BV}\sum_{n=1}^{B}\sum_{v=1}^{V}
+   \left\|z_{n,v}-\mu_n\right\|_2^2.
+\end{equation}
+There is no detach operation on the center or either encoder path.
+
+For each view, SIGReg projects the physical batch onto random unit directions
+$a\in\mathcal{A}\subset\mathbb{S}^{D-1}$ and applies the Epps-Pulley
+Gaussianity statistic $T_{\mathrm{EP}}$:
+\begin{equation}
+  \mathcal{L}_{\mathrm{SIGReg}}
+  =\frac{1}{V|\mathcal{A}|}
+   \sum_{v=1}^{V}\sum_{a\in\mathcal{A}}
+   T_{\mathrm{EP}}\!\left(\{a^{\top}z_{n,v}\}_{n=1}^{B}\right).
+\end{equation}
+The regularizer is computed separately across the physical batch of each view;
+correlated views are not flattened into the sample axis. The complete objective
+is \cite{lejepa}
+\begin{equation}
+  \mathcal{L}_{\mathrm{LeJEPA}}
+  =(1-\lambda)\mathcal{L}_{\mathrm{inv}}
+  +\lambda\mathcal{L}_{\mathrm{SIGReg}},\qquad \lambda=0.05.
+\end{equation}
+The implementation retains 1,024 random directions and a 17-point quadrature
+over the Epps-Pulley statistic from the preceding MRI LeJEPA experiment.
+
+\section{Data and Training Formulation}
+
+Self-supervised optimization uses only the retrospective cohort. It covers all
+15 field-strength and modality domains. Prospective paired subjects are
+excluded so that later subject-held-out translation experiments remain unseen
+to both SSL and supervised fine-tuning. Sampling is hierarchical: first a
+domain is chosen uniformly, then a volume within that domain, and finally a
+valid 16-slice interval. This prevents domains or scans with more eligible
+windows from dominating the representation objective.
+
+The organizer-provided finite \texttt{float32} intensities remain in $[0,1]$
+through view construction. After mild blur or noise they are clamped and mapped
+to the encoder range by
+\begin{equation}
+  x_{\mathrm{enc}}=2x-1.
+\end{equation}
+No per-volume standardization, histogram matching, or field-specific
+normalization is used because those operations could erase acquisition
+appearance needed downstream. The encoder and projector are initialized from
+scratch and optimized with AdamW in BF16.
+
+\section{Representation Validation and Intended Transfer}
+
+The objective acts on projected CLS embeddings, but the translator will consume
+dense tokens. A CLS loss does backpropagate through attention and the tubelet
+stem; it does not require each spatial coordinate to preserve local anatomy.
+The SSL Cookbook likewise cautions that representation rank is only a necessary
+condition and that methods tuned for global recognition may lack localization
+needed by dense tasks \cite{cookbook}.
+
+Accordingly, validation separates three questions. First, finite losses,
+gradient norms, feature standard deviation, singular spectra, and effective
+rank detect optimization failure or collapse. For singular values $\sigma_k$
+of a representation matrix, the effective rank is
+\begin{equation}
+  \operatorname{Rank}_{\mathrm{eff}}(Z)
+  =\exp\!\left(-\sum_k p_k\log p_k\right),
+  \qquad p_k=\frac{\sigma_k}{\sum_j\sigma_j}.
+\end{equation}
+Second, related-view retrieval and coordinate-matched dense-token
+correspondence test whether the encoder retains subject anatomy beyond global
+collapse avoidance. Third, the causal transfer test compares the same
+downstream model initialized either from the exported encoder or randomly.
+
+Only the exact tubelet encoder is exported. The projection MLP and SIGReg are
+training-only components. A downstream consumer receives post-final-LayerNorm
+dense features
+\begin{equation}
+  F\in\R^{B\times8\times h\times w\times768},
+\end{equation}
+adds source-field, target-field, and modality conditioning outside the SSL
+encoder, and fine-tunes the complete encoder. This avoids repeating the main
+confounds of the prior two-dimensional transfer experiment: an incompletely
+matched feature path and a mostly frozen backbone.
+
+\section{Discussion}
+
+The design combines a paper-backed video tubelet architecture with the simpler
+LeJEPA objective and MRI-specific view semantics. Its central hypothesis is
+that neighboring axial slices provide useful volumetric context without
+requiring masked reconstruction or an EMA teacher. Its central limitation is
+equally explicit: healthy pooled embeddings do not prove dense anatomical
+utility. Dense diagnostics and matched downstream initialization are therefore
+part of the method's evaluation, not optional supporting evidence.
+
+\vspace{-0.4em}
+\footnotesize
+\begin{thebibliography}{9}
+\setlength{\itemsep}{-1pt}
+
+\bibitem{mrixfields}
+MRIxFields2026 Organizers.
+\newblock \emph{MRIxFields2026: Cross-Field Brain MRI Synthesis Challenge}.
+\newblock Official challenge website and repository, 2026.
+
+\bibitem{lejepa}
+R. Balestriero and Y. LeCun.
+\newblock LeJEPA: Provable and scalable self-supervised learning without the heuristics.
+\newblock \emph{arXiv:2511.08544}, 2025.
+
+\bibitem{avjepa}
+B. Robson, S. Mentu, W. Zhao, and A. Solin.
+\newblock AV-JEPA: Extending LeJEPA to audio-visual self-supervised learning.
+\newblock \emph{arXiv:2607.15295}, 2026.
+
+\bibitem{echojepa}
+A. Munim et al.
+\newblock EchoJEPA: A latent predictive foundation model for echocardiography.
+\newblock \emph{arXiv:2602.02603}, 2026.
+
+\bibitem{vjepa}
+A. Bardes et al.
+\newblock Revisiting feature prediction for learning visual representations from video.
+\newblock \emph{arXiv:2404.08471}, 2024.
+
+\bibitem{videomae}
+Z. Tong, Y. Song, J. Wang, and L. Wang.
+\newblock VideoMAE: Masked autoencoders are data-efficient learners for self-supervised video pre-training.
+\newblock \emph{Advances in Neural Information Processing Systems}, 2022.
+
+\bibitem{vit}
+A. Dosovitskiy et al.
+\newblock An image is worth 16x16 words: Transformers for image recognition at scale.
+\newblock \emph{International Conference on Learning Representations}, 2021.
+
+\bibitem{cookbook}
+R. Balestriero et al.
+\newblock A cookbook of self-supervised learning.
+\newblock \emph{arXiv:2304.12210}, 2023.
+
+\end{thebibliography}
+
+\end{document}
