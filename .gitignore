@@ -19,8 +19,13 @@ SynthSegInfo.md
 *.odt
 *.ods
 
-# Third party reference notebook (re-downloadable from sander.ai)
+# specific files from local
 Diffusion_is_spectral_autoregression_Sander_Dieleman.ipynb
+baseline_experiment_logs.csv
+possible_routes_report*
+swin_spectral_analysis*
+task3_unet_architecture.pdf
+
 
 # Local environment
 .env
@@ -62,6 +67,7 @@ runs/
 outputs/
 preds/
 preds_seg/
+logs/
 submissions/
 *.nii
 *.nii.gz
