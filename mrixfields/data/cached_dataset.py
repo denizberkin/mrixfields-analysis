@@ -162,6 +162,100 @@ class CachedPairedDataset(Dataset):
         return {"source": src_img, "target": tgt_img}
 
 
+class CachedMultiContrastDataset(Dataset):
+    """All three contrasts at one field strength -> one contrast at another.
+
+    Task 3 is pure contrast mapping: source and target are the same subject, already
+    registered, so the anatomy is free (copying the source scores SSIM 0.836) and only the
+    intensity relationship has to be learned. From a single contrast that relationship is
+    under-determined -- one intensity per voxel cannot separate white matter from grey from
+    a partial-volume edge, so how the voxel behaves at another field strength is guesswork.
+    Three contrasts at the same field largely pin down the underlying tissue parameters, and
+    from those the target field is close to deterministic.
+
+    The extra contrasts cost nothing to obtain: the training split has all 3 modalities at
+    all 5 fields for every subject, and the validation split gives each subject all three
+    modalities at its one source field (subject 0001 has T1W, T2W and T2FLAIR at 0.1T).
+
+    Channels are (primary, T1W, T2W, T2FLAIR): the auxiliaries keep a fixed order so a
+    channel always means the same contrast, and channel 0 duplicates whichever contrast is
+    being predicted. The duplication is what makes the transfer exact -- a single-channel
+    checkpoint's first convolution moves onto channel 0 with the three auxiliaries zeroed,
+    so the multi-contrast model starts bit-identical to the model it was seeded from and the
+    extra contrasts can only add. Without it the "right" channel moves per sample and no
+    fixed convolution reproduces the pretrained response.
+    """
+
+    def __init__(
+        self,
+        preprocessed_dir: str | Path,
+        split: str,
+        target_modality: str,
+        source_field: str,
+        target_field: str,
+        input_modalities: Optional[Tuple[str, ...]] = None,
+        crop_size: Optional[Tuple[int, int]] = None,
+        transform: Optional[Callable] = None,
+    ):
+        self.preprocessed_dir = Path(preprocessed_dir)
+        self.transform = transform or _cached_transform(crop_size)
+        self.input_modalities = tuple(input_modalities or MODALITIES)
+        self.target_modality = target_modality
+        if target_modality not in self.input_modalities:
+            raise ValueError(
+                f"target_modality {target_modality!r} must be among the input modalities "
+                f"{self.input_modalities} so that channel 0 can duplicate it"
+            )
+
+        def _pair_key(path: Path) -> str:
+            # "pro_train_T1W_0.1T_P_0006_s072" -> "0006_s072"; carries neither modality nor
+            # field, which is what lets it match across both.
+            return "_".join(path.stem.split("_")[-2:])
+
+        lookups = {}
+        for modality in self.input_modalities:
+            files = _list_npz_files(self.preprocessed_dir, split, modality, source_field)
+            if not files:
+                raise FileNotFoundError(
+                    f"No npz files for input modality {modality} at {source_field} in "
+                    f"{self.preprocessed_dir / split}"
+                )
+            lookups[modality] = {_pair_key(f): f for f in files}
+        target_files = _list_npz_files(self.preprocessed_dir, split, target_modality, target_field)
+        if not target_files:
+            raise FileNotFoundError(
+                f"No npz files for {target_modality} at {target_field} in "
+                f"{self.preprocessed_dir / split}"
+            )
+
+        # Keep only slices present in every input modality *and* the target. A subject
+        # missing one contrast is dropped rather than zero-filled: a zero channel is a
+        # legitimate intensity here, so imputing one would be indistinguishable from data.
+        self.samples: List[Tuple[Tuple[Path, ...], Path]] = []
+        for target_path in target_files:
+            key = _pair_key(target_path)
+            if all(key in lookups[m] for m in self.input_modalities):
+                self.samples.append(
+                    (tuple(lookups[m][key] for m in self.input_modalities), target_path)
+                )
+        if not self.samples:
+            raise ValueError(
+                f"No slices where {self.input_modalities} at {source_field} and "
+                f"{target_modality} at {target_field} all exist for the same subject."
+            )
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
+        source_paths, target_path = self.samples[index]
+        auxiliary = [self.transform(np.load(p)["image"]) for p in source_paths]
+        primary = auxiliary[self.input_modalities.index(self.target_modality)]
+        source = torch.cat([primary, *auxiliary], dim=0)
+        target = self.transform(np.load(target_path)["image"])
+        return {"source": source, "target": target}
+
+
 class CachedMultiDomainDataset(Dataset):
     """Multi-domain 2D slice dataset from preprocessed npz for StarGAN v2.
 
