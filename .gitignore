@@ -83,3 +83,7 @@ submissions/
 !/reports/tables/
 !/reports/visuals/
 !/reports/**/*.png
+
+# LeJEPA pretraining: nested checkout of furkanycy/MRIxFields + its deploy key.
+# The private key must never be committed.
+/lejepa_pretraining/
