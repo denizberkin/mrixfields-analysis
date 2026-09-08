@@ -1158,9 +1158,31 @@ trained partly on SSIM would have a different generalisation gap -- did not mate
 
 Local delta +0.00230 became challenge +0.00210, a transfer of **0.91x**.
 
-- [ ] **28.6** The weight is unswept. 0.5 works but oscillates, so the result depends on landing
-  a good checkpoint. 0.15-0.25 plausibly gives the same level with a stable curve, and may be
-  worth more outright if the oscillation is itself costing us. Two 8-epoch runs, ~2 h.
+- [x] **28.6 Swept, and negative: 0.5 stays.** Three weights, 41 checkpoints scored on 0009.
+
+| weight | 0.10 (25 ep) | 0.25 (8 ep) | **0.50 (8 ep)** |
+|---|---|---|---|
+| best local SSIM | 0.9585 (e16) | 0.9548 (e6) | **0.9606 (e8)** |
+
+`task3_mc_ssim_w010_long`, the full 25-epoch curve at weight 0.10:
+
+| e2 | e4 | e6 | e8 | e10 | e12 | e14 | e16 | e18 | e20 | e22 | e24 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0.9542 | 0.9554 | 0.9574 | 0.9580 | 0.9526 | 0.9573 | 0.9551 | **0.9585** | 0.9560 | 0.9577 | 0.9560 | 0.9516 |
+
+Three things this kills at once. **The premise was wrong**: a lower weight does not buy a stable
+curve, it oscillates by the same +/-0.003 between adjacent epochs while the training loss falls
+monotonically. **The response is not monotone in the weight**: 0.25 scored below both of its
+neighbours, so there is no gradient to follow and no interpolation to trust. **Length does not
+rescue it**: 25 epochs at 0.10 peak at 0.9585, below the 8-epoch run at 0.50, and e24 falls to
+0.9516.
+
+Epochs 2-8 of the 25-epoch run reproduce the 8-epoch run to the last digit (0.9542 / 0.9554 /
+0.9574 / 0.9580), so the trajectory is deterministic and the swings are a property of the SSIM
+term, not of the run.
+
+The lever's gains have to be *harvested by dense sampling*, not engineered away: `save_every = 1`
+and score every epoch. That is also the standing lesson from 28.2, arrived at twice now.
 
 ## 29. 25.3 answered: multi-contrast plateaus at e20, it does not compose with a longer schedule (2026-09-08)
 
