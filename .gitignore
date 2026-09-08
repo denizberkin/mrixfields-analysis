@@ -87,3 +87,7 @@ submissions/
 # LeJEPA pretraining: nested checkout of furkanycy/MRIxFields + its deploy key.
 # The private key must never be committed.
 /lejepa_pretraining/
+
+# Synapse leaderboard snapshots: other teams' submission data, not ours to publish.
+# scripts/leaderboard.py regenerates them from syn74915588 on demand.
+table_*.csv
