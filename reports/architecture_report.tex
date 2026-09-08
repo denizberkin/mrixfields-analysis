@@ -1,0 +1,293 @@
+% Visual summary of the Task 3 architecture experiments.
+% Compile from inside reports/:  ~/anaconda3/envs/tex/bin/tectonic architecture_report.tex
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[margin=18mm]{geometry}
+\usepackage{tikz}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage[colorlinks=true,linkcolor=black,urlcolor=black]{hyperref}
+
+\usetikzlibrary{positioning,arrows.meta,fit,backgrounds}
+
+\definecolor{base}{HTML}{9FB3C8}
+\definecolor{baseline}{HTML}{D9E2EC}
+\definecolor{accent}{HTML}{D64545}
+\definecolor{accentfill}{HTML}{FBE4E4}
+\definecolor{cond}{HTML}{3E7CB1}
+\definecolor{ink}{HTML}{102A43}
+\definecolor{muted}{HTML}{627D98}
+
+\captionsetup[figure]{font=small,labelfont=bf}
+\captionsetup[subfigure]{font=small}
+
+% ---------------------------------------------------------------- U-Net glyph
+% One small U-Net. #1 is overlay TikZ code drawn on top of the base skeleton,
+% so every variant below is the SAME picture plus its own change in red.
+\tikzset{
+  blk/.style   = {draw=base, fill=baseline, rounded corners=0.4pt,
+                  minimum height=2.4mm, inner sep=0pt, line width=0.3pt},
+  hot/.style   = {draw=accent, fill=accentfill, line width=0.7pt},
+  io/.style    = {font=\tiny, text=muted, inner sep=1pt},
+  skip/.style  = {->, draw=base, line width=0.3pt, >={Stealth[length=1mm]}},
+  flow/.style  = {->, draw=muted, line width=0.35pt, >={Stealth[length=1.2mm]}},
+  tag/.style   = {font=\tiny\bfseries, text=accent, inner sep=1pt},
+}
+
+\newcommand{\unet}[1]{%
+\begin{tikzpicture}[x=1mm,y=1mm,baseline]
+  % fixed bounding box: every glyph is the same size, so the captions below line up
+  \path (-9.5,9.5) rectangle (24,-23);
+  % encoder (left) and decoder (right); each level is indented, so the shape reads as a U
+  \foreach \i/\w in {0/9,1/7,2/5,3/3.5}{
+    \node[blk,minimum width=\w mm] (e\i) at ({\i*1.7},{-\i*4}) {};
+    \node[blk,minimum width=\w mm] (d\i) at ({16-\i*1.7},{-\i*4}) {};
+  }
+  \node[blk,minimum width=3mm] (b) at (8,-16.5) {};
+  \foreach \i in {0,1,2,3}{ \draw[skip] (e\i) -- (d\i); }
+  \foreach \i [evaluate=\i as \j using int(\i+1)] in {0,1,2}{
+    \draw[flow] (e\i) -- (e\j);  \draw[flow] (d\j) -- (d\i);
+  }
+  \draw[flow] (e3) -- (b);  \draw[flow] (b) -- (d3);
+  \node[io,left=1.2mm of e0] (in) {$x$};
+  \node[io,right=1.2mm of d0] (out) {$\hat{y}$};
+  \draw[flow] (in) -- (e0);  \draw[flow] (d0) -- (out);
+  #1
+\end{tikzpicture}}
+
+% conditioning tokens added at the bottleneck
+\newcommand{\condtokens}[1][cond]{%
+  \node[draw=#1, fill=white, rounded corners=0.4pt, minimum width=7mm,
+        minimum height=2.2mm, line width=0.5pt, font=\tiny, text=#1,
+        inner sep=0.5pt] (c) at (8,-21) {$E_s\!+\!E_t$};
+  \draw[->, draw=#1, line width=0.5pt, >={Stealth[length=1mm]}] (c) -- (b);}
+
+% panel heading: short name left, score right, always one line
+\newcommand{\panel}[2]{\makebox[\linewidth]{\footnotesize\bfseries #1\hfill #2}}
+
+\begin{document}
+\pagestyle{empty}
+
+\begin{center}
+  {\Large\bfseries MRIxFields 2026 — Task 3 architecture log}\\[1.5mm]
+  {\small Team \texttt{inzva\_mri} · every diagram is the same U-Net skeleton;
+   \textcolor{accent}{red marks only what changed} · scores are challenge SSIM}\\[0.5mm]
+  {\footnotesize Leaderboard pulled 2026-09-08 from \texttt{syn74915588} (Task 3 queue 9619636)}
+\end{center}
+\vspace{1mm}
+
+% ============================================================ the lineage
+\begin{figure}[h]
+\centering
+\begin{subfigure}[t]{0.32\textwidth}\centering
+  \unet{%
+    \draw[->,draw=accent,line width=0.9pt,>={Stealth[length=1.6mm]}]
+      (in) to[out=55,in=125] (out);
+    \node[tag,align=center] at (8,8) {no network at all: $\hat{y}=x$};
+  }
+  \caption*{\panel{0 · copy the source}{0.836497}\\[0.5mm]
+  \footnotesize Submitted deliberately. Source and target are the same registered subject,
+  so the anatomy is free --- this is the number every model has to beat.}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.32\textwidth}\centering
+  \unet{}
+  \caption*{\panel{1 · vanilla U-Net}{0.869856}\\[0.5mm]
+  \footnotesize Textbook U-Net, BatchNorm+ReLU, transposed-conv upsampling. It is never told
+  which field pair it is being asked for. \textcolor{muted}{+0.0334}}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.32\textwidth}\centering
+  \unet{%
+    \condtokens
+    \node[tag,align=center,text=cond] at (8,6) {two domain\\embeddings};
+  }
+  \caption*{\panel{2 · + conditioning}{0.897646}\\[0.5mm]
+  \footnotesize \textcolor{cond}{Source and target embeddings} over the 15
+  modality$\times$field domains, broadcast-added at the bottleneck. \textcolor{cond}{+0.0278}}
+\end{subfigure}
+
+\vspace{2.5mm}
+
+\begin{subfigure}[t]{0.32\textwidth}\centering
+  \unet{%
+    \condtokens
+    \foreach \i/\w in {0/9,1/7,2/5,3/3.5}{\node[blk,hot,minimum width=\w mm] at (d\i) {};}
+    \node[tag] at (19,6) {FiLM};
+    \draw[->,draw=accent,line width=0.4pt,>={Stealth[length=1mm]}] (19,4.6) -- (17.5,1.8);
+    \node[draw=accent,fill=accentfill,line width=0.6pt,rounded corners=0.4pt,
+          font=\tiny,text=accent,inner sep=0.7pt] at (21,-6) {$x+f(x)$};
+  }
+  \caption*{\panel{3 · + FiLM \& residual}{0.892839}\\[0.5mm]
+  \footnotesize Zero-init FiLM after both norms of every \emph{decoder} block; the head predicts a
+  correction to the input instead of the image. Both are exact no-ops at step 0.}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.32\textwidth}\centering
+  \unet{%
+    \condtokens
+    \foreach \i/\w in {0/9,1/7,2/5,3/3.5}{\node[blk,hot,minimum width=\w mm] at (e\i) {};}
+    \node[blk,hot,minimum width=3mm] at (b) {};
+    \node[tag,align=center] at (6,7) {encoder pretrained on\\1{,}939 unpaired volumes};
+  }
+  \caption*{\panel{4 · + MIM pretraining}{0.903110}\\[0.5mm]
+  \footnotesize Identical network. Weights initialised by masked-image modelling (50\% masked,
+  16\,px patches, 30k steps) on the \emph{retrospective} split, which has no paired target.
+  \textcolor{accent}{+0.0103}}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.32\textwidth}\centering
+  \unet{%
+    \condtokens
+    \node[blk,hot,minimum width=9mm] at (e0) {};
+    \foreach \k/\lab in {0/{$x$},1/{T1},2/{T2},3/{FL}}{
+      \node[blk,hot,minimum width=2.4mm,minimum height=1.6mm] (ch\k) at (-6,{2.4-\k*2}) {};
+      \node[font=\tiny,text=muted,inner sep=0.4pt,left=0.3mm of ch\k] {\lab};}
+    \draw[->,draw=accent,line width=0.4pt,>={Stealth[length=1mm]}] (ch1) -- (e0);
+    \node[tag,align=center] at (-2,8) {1\,$\to$\,4 input channels};
+  }
+  \caption*{\panel{5 · + multi-contrast}{\textcolor{accent}{0.906773}}\\[0.5mm]
+  \footnotesize All three contrasts at the source field. Channel 0 duplicates the contrast being
+  predicted, so the old single-channel first conv transfers exactly. \textcolor{accent}{+0.0037}}
+\end{subfigure}
+\caption{The line that worked. Each panel keeps everything to its left and changes one thing.
+The two steps that paid --- conditioning and pretraining on unpaired data --- are the two that gave
+the network \emph{more information}, not more capacity.}
+\end{figure}
+
+\vspace{-1mm}
+
+% ============================================================ dropped backbones
+\begin{figure}[h]
+\centering
+\begin{subfigure}[t]{0.32\textwidth}\centering
+  \unet{%
+    \foreach \i/\w in {0/9,1/7,2/5,3/3.5}{\node[blk,hot,minimum width=\w mm] at (e\i) {};}
+    \node[blk,hot,minimum width=3mm] at (b) {};
+    \node[tag,align=center] at (6,7) {Swin-T encoder,\\volumetric};
+    \node[tag,text=cond] at (20,-20) {re-injected};
+    \draw[->,draw=cond,line width=0.4pt,>={Stealth[length=1mm]}] (20,-18.6) -- (17,-13);
+  }
+  \caption*{\panel{Swin UNETR 3D}{0.858214}\\[0.5mm]
+  \footnotesize Shifted-window transformer encoder on volumes. Conditioning had to be re-injected
+  in the decoder --- a bottleneck add does not survive the norms.}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.32\textwidth}\centering
+  \unet{%
+    \foreach \i/\w in {0/9,1/7,2/5,3/3.5}{\node[blk,hot,minimum width=\w mm] at (e\i) {};}
+    \node[blk,hot,minimum width=3mm] at (b) {};
+    \node[tag,align=center] at (6,7) {frozen DINOv3 ViT,\\natural images};
+  }
+  \caption*{\panel{ViT / DINOv3}{0.878918}\\[0.5mm]
+  \footnotesize Pretrained natural-image features reassembled by a conv decoder. Teammate's run.}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.32\textwidth}\centering
+  \unet{%
+    \foreach \i/\w in {0/9,1/7,2/5,3/3.5}{\node[blk,hot,minimum width=\w mm] at (e\i) {};}
+    \node[blk,hot,minimum width=3mm] at (b) {};
+    \node[tag,align=center] at (6,7) {LeJEPA tubelet encoder,\\axial slabs};
+  }
+  \caption*{\panel{Tubelet + UNETR}{0.859000}\\[0.5mm]
+  \footnotesize Self-supervised video-style encoder on axial slabs, conditioned UNETR decoder.}
+\end{subfigure}
+\caption{Backbones tried and dropped --- in each case the \textcolor{accent}{encoder} is replaced
+and the decoder kept. All three are stronger feature extractors than a 32-channel U-Net and all
+three scored \emph{worse}: with three paired training subjects, encoder capacity is not the
+binding constraint.}
+\end{figure}
+
+% ============================================================ table
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{llrrrl}
+\toprule
+Submission & Architecture & SSIM $\uparrow$ & nRMSE $\downarrow$ & LPIPS $\downarrow$ & Date \\
+\midrule
+\multicolumn{6}{l}{\itshape the line that worked} \\
+\texttt{task3\_input\_validation}      & identity control                & 0.836497 & 0.521604 & 0.157279 & 28/08 \\
+\texttt{unet-vanilla}                  & vanilla U-Net                   & 0.869856 & 0.402221 & 0.119849 & 30/08 \\
+\texttt{unet-unconditioned}            & same, conditioning ablated      & 0.869784 & 0.404143 & 0.120421 & 30/08 \\
+\texttt{unet\_conditioned\_50ep}       & + domain embeddings             & 0.897646 & 0.241173 & 0.089527 & 30/08 \\
+\texttt{unet\_film\_residual\_ep8}     & + FiLM + residual head          & 0.892839 & 0.263835 & 0.092091 & 05/09 \\
+\texttt{retro\_pretrain\_film}         & + MIM pretrain (12k, 883 vol)   & 0.901633 & 0.242206 & 0.085563 & 06/09 \\
+\texttt{unet\_cond\_retro30k\_pro20ep} & + MIM pretrain (30k, 1939 vol)  & 0.903110 & 0.245574 & 0.083882 & 07/09 \\
+\textbf{\texttt{unet\_multi\_contrast\_e20}} & \textbf{+ 4-channel input} & \textbf{0.906773} & 0.243607 & \textbf{0.080831} & 08/09 \\
+\midrule
+\multicolumn{6}{l}{\itshape alternative backbones, dropped} \\
+\texttt{swin\_cond\_10ep}              & Swin UNETR 3D, 10 ep            & 0.831536 & 0.300152 & 0.171283 & 31/08 \\
+\texttt{swin\_cond\_50ep}              & Swin UNETR 3D, 50 ep            & 0.858214 & 0.279713 & 0.145240 & 31/08 \\
+\texttt{tubelet\_encoder\_unetr\_...}  & LeJEPA tubelet + UNETR          & 0.859000 & 0.265807 & 0.143556 & 05/09 \\
+\midrule
+\multicolumn{6}{l}{\itshape teammates, same team} \\
+\texttt{\dag}                          & 3D U-Net, conditioned           & 0.902596 & 0.232930 & 0.081630 & 02/09 \\
+\texttt{b-u}                           & U-Net variant                   & 0.898601 & 0.233648 & 0.081925 & 30/08 \\
+\texttt{task\_3\_overfit\_fix\_try\_8b}& FPS-Former                      & 0.879531 & 0.247053 & 0.149198 & 02/09 \\
+\texttt{vit\_256\_150}                 & ViT / DINOv3                    & 0.878918 & 0.248285 & 0.149620 & 31/08 \\
+\texttt{val\_task3}                    & StarGAN v2 (challenge baseline) & 0.739694 & 0.343583 & 0.154472 & 15/07 \\
+\bottomrule
+\end{tabular}
+\caption{Every accepted 180/180 Task 3 submission from \texttt{inzva\_mri}, by architecture.
+\dag\ the submission is literally named ``\v{g}''.}
+\end{table}
+
+\newpage
+\small
+
+% ============================================================ reading
+\section*{What the log actually says}
+
+\textbf{Three architecture changes were worth nothing, two data changes were worth everything.}
+Swapping BatchNorm/ReLU for InstanceNorm/LeakyReLU moves the score by $0.00007$
+(\texttt{unet-vanilla} vs \texttt{unet-unconditioned}). A shifted-window transformer, a
+DINOv3 ViT and a self-supervised tubelet encoder are all stronger feature extractors than a
+32-channel U-Net, and all three land $0.02$--$0.05$ \emph{below} it. What moved the number was
+telling the network which field pair it is solving ($+0.0278$), showing it 1{,}939 volumes it
+could not otherwise use ($+0.0103$), and giving it the other two contrasts ($+0.0037$).
+
+\smallskip
+\textbf{With three paired subjects, capacity is not the constraint --- information is.}
+
+\smallskip
+\textbf{Every change was made a no-op at initialisation.} The residual head, the FiLM
+projections and the three new input channels are all zero-initialised, so each run
+\emph{starts} at exactly the previous run's score and any movement is attributable to the
+change rather than to a different random init. The 4-channel model reproduced its
+1-channel parent at $\max|\Delta| = 0$ on real data before training began.
+
+\section*{Where we stand}
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{lrrr}
+\toprule
+& SSIM $\uparrow$ & nRMSE $\downarrow$ & LPIPS $\downarrow$ \\
+\midrule
+\texttt{inzva\_mri} best (\texttt{multi\_contrast\_e20}) & 0.906773 \ (10 / 23) & 0.243607 \ (15 / 23) & 0.080831 \ (\textbf{3 / 23}) \\
+top-5 median                                            & 0.914467            & 0.220767 & 0.098120 \\
+best in period                                          & 0.916747            & 0.216049 & 0.069441 \\
+\bottomrule
+\end{tabular}
+\caption{Ranks over the 23 teams that submitted from 2026-08-01 onward --- see the note below on
+why the all-time table is not the right comparison.}
+\end{table}
+
+\noindent
+\textbf{The all-time leaderboard is misleading, and it is worth knowing why.} Its top three (0.9314, 0.9281,
+0.9263, all with nRMSE near $0.11$ against the field's $\sim0.23$) come from two teams inside a
+five-week window that closed on 2026-07-07. \emph{Every} submission in the challenge scoring
+nRMSE below $0.15$ falls in that window; since then the best anyone has posted, those two teams
+included, is $0.2151$.
+
+The evaluator did not change underneath them: four different teams have submitted an unmodified
+copy of the source, and all four scored \textbf{0.836497 / 0.521604} to six decimals, on
+2026-06-16, 08-19, 08-20 and 08-28. That fingerprint pins the metric as stable across the whole
+period, so the discontinuity is in those submissions, not in the scoring. One of them is even
+named \texttt{new\_no\_leak}. Treat $\sim$\,0.9167 as the real frontier and the gap we have to
+close as \textbf{about 0.010}, not 0.025.
+
+\smallskip\noindent
+\textbf{What survives that correction is the shape of our error.} We are 3rd of 23 on LPIPS and
+15th on nRMSE. The five teams above us are better on \emph{both} SSIM and nRMSE while being worse
+than us on LPIPS. We train on $L_1 + 0.05\,\mathrm{LPIPS}$ and no structural term at all --- we
+are optimising the metric we already lead and not the one that is ranked.
+\end{document}
