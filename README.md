@@ -1,199 +1,195 @@
-# MRIxFields2026 Baseline
+# mrixfields-analysis
 
-Baseline implementations for cross-field brain MRI translation.
+Analysis and experiment workspace for the MRIxFields 2026 challenge (cross-field
+brain MRI translation: given a brain MRI at one field strength/modality, synthesise
+it at another). Team: Berkin Deniz Kahya, Furkan Yüceyalçın, Racha Badreddine,
+Ahmet Zelka.
 
-## Models
+Field strengths: `0.1T`, `1.5T`, `3T`, `5T`, `7T`. Modalities: `T1W`, `T2W`,
+`T2FLAIR`. 15 domains = 5 fields × 3 modalities.
 
-| Method | Paper | Tasks | Key Idea |
-|--------|-------|-------|----------|
-| **CUT** | Park et al., ECCV 2020 | Task 1, 2 | Single G+D, PatchNCE contrastive loss |
-| **CycleGAN** | Zhu et al., ICCV 2017 | Task 1, 2 | Dual G+D, cycle consistency loss |
-| **StarGAN v2** | Choi et al., CVPR 2020 | Task 3 | Multi-domain with AdaIN style injection |
+This repo hosts the shared `mrixfields` package, generated baseline configs
+(CUT/CycleGAN/StarGAN v2), analysis/reporting scripts, and two git submodules:
+`experiment-pipeline` (where current training actually happens) and `SynthSeg`
+(segmentation metrics). For the current research plan and status, see
+[`TODO.md`](TODO.md).
 
-Pre-trained checkpoints (all 147 task × method × mode combinations) are available on Hugging Face: [`mrixfields/MRIxFields2026-Baseline`](https://huggingface.co/mrixfields/MRIxFields2026-Baseline).
+## Status
 
-## Prerequisites
+Task 3, modality-averaged, best-per-model (see `baseline_experiment_logs.csv`
+and `reports/` for the full breakdown). Lower is better for nRMSE/LPIPS,
+higher is better for SSIM.
 
-### Install Dependencies
+| Model | nRMSE | SSIM | LPIPS |
+|---|---|---|---|
+| INPUT (identity control) | 0.5216 | 0.8365 | 0.1573 |
+| StarGAN v2 (challenge baseline) | 0.3436 | 0.7397 | 0.1545 |
+| FPS-Former (203 ep) | 0.2471 | 0.8795 | 0.1492 |
+| Conditional U-Net (50 ep) | 0.2412 | 0.8976 | 0.0895 |
+| U-Net 3D + tubelet LeJEPA encoder | 0.2383 | 0.8893 | 0.0889 |
+| **U-Net 3D (10 ep)** | **0.2329** | **0.9026** | **0.0816** |
+
+Current leader is the plain 3D U-Net at only 10 epochs, ahead of both the
+conditional variant and the LeJEPA-pretrained encoder. See [`TODO.md`](TODO.md)
+for why, and what's being tried next.
+
+## Setup
+
+**Python environment** already exists — do not `conda env create`. There is no
+`environment.yml` in this repo.
 
 ```bash
-# From repo root
-conda env create -f environment.yml
-conda activate mf
+~/anaconda3/envs/mri/bin/python --version   # 3.13, torch 2.13.0+cu126 (CUDA), mlflow 3.14.0
 ```
 
-This installs PyTorch (CUDA 12.1), TensorFlow 2.15, and the `mrixfields` package.
+**LaTeX**: `~/anaconda3/envs/tex/bin/tectonic` (no system `pdflatex`/`latexmk`; see
+Reports below).
 
-For CUDA 11.8: edit `environment.yml` and replace `cu121` with `cu118` before running.
-
-### Configure Paths
-
-```bash
-cp .env.example .env
-vim .env  # Edit paths below
-```
+**Environment variables**: a real `.env` already sits at the repo root (there is
+no `.env.example` to copy from). It is loaded automatically by
+`mrixfields.env.load_env()` in Python; for shell commands using `$DATA_DIR`
+etc., run `source .env` first.
 
 | Variable | Description |
 |----------|-------------|
-| `DATA_DIR` | Dataset root (contains Training_retrospective, etc.) |
+| `DATA_DIR` | Dataset root |
 | `PREPROCESSED_DIR` | Extracted 2D slices for training |
 | `OUTPUT_DIR` | Training checkpoints and logs |
 | `INFERENCE_DIR` | Inference outputs |
-| `SYNTHSEG_DIR` | SynthSeg installation (for evaluation) |
-| `DEVICE` | GPU device (e.g. `cuda:0`) |
+| `SUBMISSION_DIR` | Assembled submission archives |
 
-Python scripts auto-load `.env` via `mrixfields.env.load_env()`. For shell commands using `$DATA_DIR` etc., run `source .env` first.
+**Submodules**: `experiment-pipeline` and `SynthSeg` are git submodules — after
+cloning, run `git submodule update --init --recursive`.
 
-## Quick Start
+## Repo layout
 
-> The Step 1–5 below are the **local Baseline pipeline** (preprocess → train → inference → segmentation → local evaluation). They are distinct from the top-level [README § 6](../README.md#6-submit) submission sub-steps (segment → pack → zip → upload), which describe what to do *after* this pipeline to assemble the Synapse upload.
+```
+mrixfields/                 # installed Python package (editable, setup.py)
+├── data/                   #   dataset classes, transforms, metadata
+├── models/                 #   CUT, CycleGAN, StarGAN v2, networks
+├── losses/                 #   adversarial, patchnce, perceptual, structure
+├── env.py                  #   .env loader (load_env())
+├── utils_dist.py
+└── zclip_constants.py
 
-### Step 1: Preprocess
+experiment-pipeline/        # git submodule: denizberkin/experiment-pipeline
+├── components/             #   Task 3 models/data/losses/training
+│   ├── data/                #   task3.py, task3_volume.py
+│   ├── models/              #   conditional_unet.py, conditional_swin_unetr.py,
+│   │                        #   conditional_vit.py, unconditional_unet.py, vanilla_unet.py
+│   ├── losses/               #   reconstruction.py
+│   └── training/             #   task3.py
+├── configs/task3_*.toml    #   TOML experiment configs
+└── runs/<name>/artifacts/  #   checkpoints (*.pt) land here
 
-Extract 2D axial slices. Input volumes are in [0, 1]; preprocessing casts to float32 and slices. The training transform scales slices to [-1, 1] for tanh-output GANs.
+SynthSeg/                   # git submodule: denizberkin/SynthSeg (Dice/Volume metrics, Tasks 1-2)
+
+configs/                    # 51 generated baseline task configs
+├── task1/{cut,cyclegan}/
+├── task2/{cut,cyclegan}/
+├── task3/stargan/
+└── submission_manifests/
+
+scripts/                    # 19 entry-point scripts, notably:
+├── preprocess.py             # extract 2D slices
+├── inference.py
+├── segment_predictions.py    # SynthSeg over predictions (Tasks 1/2)
+├── spectral_analysis.py      # RAPSD / power-law alpha fits
+├── make_task3_submission.py  # build + validate the Task 3 ZIP
+├── make_source_submission.py # identity-control archive
+├── make_report_tables.py / make_slide_figures.py / spectral_figures.py
+├── clean_latex.py
+├── generate_configs.py
+└── visualize*.py
+
+reports/                    # LaTeX sources + tracked figures/tables/spectral outputs
+docs/metric_formulas.md
+tests/test_custom_submission_inference.py
+baseline_experiment_logs.csv   # gitignored local mirror of the shared results sheet
+TODO.md                        # research plan / status tracker
+```
+
+`lejepa_pretraining/` is gitignored: a sparse checkout of `furkanycy/MRIxFields`
+(the LeJEPA tubelet encoder work) under `repo/`, its deploy key under
+`.ssh_keys/`, and the pretrained encoder artifact under `artifacts/`.
+
+## Common workflows
+
+### Train (Task 3, experiment-pipeline)
+
+All current training runs through the `eval_pipeline` TOML runner. **Run these
+commands from inside `experiment-pipeline/`**, not the repo root (see Gotchas).
 
 ```bash
-cd Baseline
-python scripts/preprocess.py extract-slices --splits retro_train pro_train
+cd experiment-pipeline
+
+# 1. Validate the config and imports first
+~/anaconda3/envs/mri/bin/python -m eval_pipeline validate configs/task3_unet_pro.toml --check-imports
+
+# 2. Run training + validation (the default --stages is "test" only, so specify explicitly)
+~/anaconda3/envs/mri/bin/python -m eval_pipeline run configs/task3_unet_pro.toml --stages training validation
 ```
 
-### Step 2: Train
+Checkpoints land in `experiment-pipeline/runs/<name>/artifacts/*.pt`. Other
+Task 3 configs live alongside `task3_unet_pro.toml` in `experiment-pipeline/configs/`
+(unconditional, vanilla, ViT, Swin UNETR, retro/pro finetune variants).
+
+### Build a Task 3 submission
 
 ```bash
-# Task 1 (Any -> 7T): CUT, 0.1T -> 7T
-python scripts/train.py \
-    --config configs/task1/cut/0.1T_to_7T_T1W.yaml \
-    --mode retro_scratch
-
-# Task 2 (0.1T -> Higher): CycleGAN, 0.1T -> 3T
-python scripts/train.py \
-    --config configs/task2/cyclegan/0.1T_to_3T_T1W.yaml \
-    --mode retro_scratch
-
-# Task 3 (Any -> Any): StarGAN v2
-python scripts/train.py \
-    --config configs/task3/stargan/any_to_any_T1W.yaml \
-    --mode retro_scratch
+~/anaconda3/envs/mri/bin/python scripts/make_task3_submission.py \
+    --checkpoint experiment-pipeline/runs/<run>/artifacts/<ckpt>.pt \
+    --architecture {unconditional,conditional,vanilla,vit,swin} \
+    --name <name> \
+    --dry-run   # run once without --dry-run to actually write the archive
 ```
 
-### Step 3: Inference
+A complete Task 3 archive is 20 field pairs × 3 modalities × 3 subjects = 180
+files; the script asserts this count. Task 3 accepts **no segmentations** —
+only voxel metrics (nRMSE, SSIM, LPIPS). Tasks 1 and 2 additionally need Dice
+and Volume, which require `scripts/segment_predictions.py` (SynthSeg) over the
+predictions first.
+
+For an identity-control baseline archive, use `scripts/make_source_submission.py`.
+
+### Spectral analysis
 
 ```bash
-# Task 1 (CUT, 0.1T -> 7T)
-python scripts/inference.py \
-    --config configs/task1/cut/0.1T_to_7T_T1W.yaml \
-    --checkpoint $OUTPUT_DIR/task1_0.1T_to_7T_T1W/cut/retro_scratch/weights/checkpoint_epoch100.pth \
-    --input_dir $DATA_DIR/Validating_prospective/T1W/0.1T/ \
-    --output_dir $INFERENCE_DIR/
-
-# Task 2 (CycleGAN, 0.1T -> 3T)
-python scripts/inference.py \
-    --config configs/task2/cyclegan/0.1T_to_3T_T1W.yaml \
-    --checkpoint $OUTPUT_DIR/task2_0.1T_to_3T_T1W/cyclegan/retro_scratch/weights/checkpoint_epoch100.pth \
-    --input_dir $DATA_DIR/Validating_prospective/T1W/0.1T/ \
-    --output_dir $INFERENCE_DIR/
-
-# Task 3 (StarGAN v2, 0.1T -> 7T — specify --target_field)
-python scripts/inference.py \
-    --config configs/task3/stargan/any_to_any_all_modalities.yaml \
-    --checkpoint $OUTPUT_DIR/task3_any_to_any_multimodal/stargan_v2/retro_scratch/weights/checkpoint_500000.pth \
-    --input_dir $DATA_DIR/Validating_prospective/T1W/0.1T/ \
-    --output_dir $INFERENCE_DIR/ \
-    --target_field 7T
+~/anaconda3/envs/mri/bin/python scripts/spectral_analysis.py --splits <...> --out-dir reports/spectral
 ```
 
-> Inference output goes into `$INFERENCE_DIR/` with **source** field tags (e.g. `P_T1W_0.1T_0001.nii.gz`). Synapse expects target field tags in a per-task tree — repack with [Submission/build_submission/](../Submission/build_submission/) before zipping. Do not `zip -r` `$INFERENCE_DIR/` directly.
+Produces the RAPSD / power-law α fits consumed by the report tables below.
 
-### Step 4: Segmentation (SynthSeg) — Task 1 / Task 2 only
+### Build the reports / slides
 
-Run SynthSeg on your predictions to produce segmentation maps for the
-Dice and Volume metrics. **Skip this step entirely for Task 3** — Task 3 is
-voxel-level only and does not accept segmentation submissions.
-
-`scripts/segment_predictions.py` mirrors `$INFERENCE_DIR/` into
-`$PREDICTIONS_SEG_DIR/` (sibling tree of seg NIfTI files), using the same
-sweep coordinates as [`Submission/build_submission/`](../Submission/build_submission/):
+Use the `report` skill, or manually:
 
 ```bash
-# Default: task1 + task2 with build_submission's defaults
-python scripts/segment_predictions.py
-
-# Single task / dry-run / force re-segment — see --help for full options
-python scripts/segment_predictions.py --tasks task1
-python scripts/segment_predictions.py --dry-run
-python scripts/segment_predictions.py --overwrite
+~/anaconda3/envs/mri/bin/python scripts/make_report_tables.py --in-dir reports/spectral --out-dir reports/tables
+~/anaconda3/envs/mri/bin/python scripts/make_slide_figures.py --out-dir reports/figures
+cd reports && ~/anaconda3/envs/tex/bin/tectonic <target>.tex
+~/anaconda3/envs/mri/bin/python scripts/clean_latex.py
 ```
 
-SynthSeg loads once (~30 s), then ~30–60 s per file. 72 files total ≈
-30–60 min on GPU. Existing seg outputs are skipped; pass `--overwrite` to
-force re-segmentation.
+`make_report_tables.py` reads `reports/spectral/alpha_summary.csv` — rerun
+`spectral_analysis.py` first if those numbers are stale. `make_slide_figures.py`
+hardcodes numbers transcribed from the experiment log and report text; edit its
+constants rather than the generated PDF. Compiled PDFs are gitignored — only
+`.tex`, `reports/figures/`, `reports/spectral/`, `reports/tables/` and
+`reports/visuals/` are tracked.
 
-For SynthSeg installation, see [Evaluation/README.md](../Evaluation/README.md). For a generic single-directory wrapper, use [Evaluation/segment.py](../Evaluation/segment.py).
+## Gotchas
 
-### Step 5: Evaluation
-
-Evaluate your predictions against ground truth:
-
-- **Task 1 / Task 2**: 5 metrics — nRMSE, SSIM, LPIPS (voxel-level) plus Dice, Volume (require Step 4 segmentations).
-- **Task 3**: 3 metrics — nRMSE, SSIM, LPIPS only (no segmentations).
-
-See [Evaluation/README.md](../Evaluation/README.md) for evaluation commands and metric details.
-
-Local evaluation is an optional pre-submission sanity check — it's not required by the Synapse evaluator, which scores submissions independently after upload.
-
-## Training Modes
-
-Each config contains both `pretrain` and `finetune` sections. Use `--mode` to select:
-
-| Mode | Step 1 | Step 2 | Use Case |
-|------|--------|--------|----------|
-| `retro_scratch` | Unpaired on retrospective | - | Pretrain only |
-| `pro_scratch` | - | Paired on prospective (from scratch) | Ablation |
-| `pro_pretrained` | Unpaired pretrain | Then paired fine-tune | Full pipeline (recommended) |
-
-**Recommended workflow**: use `pro_pretrained` for the strongest baseline
-(unpaired pretrain on retrospective + paired finetune on prospective).
-`pro_scratch` is for ablation only. `retro_scratch` produces a pretrain-only
-checkpoint that can be reused as the starting point for multiple
-`pro_pretrained` finetune runs.
-
-Output: `$OUTPUT_DIR/{task_name}/{method}/{mode}/`
-
-## Scripts
-
-| Script | Description |
-|--------|-------------|
-| `preprocess.py` | Extract 2D slices from NIfTI to npz |
-| `train.py` | Unified training (CUT, CycleGAN, StarGAN v2) |
-| `inference.py` | Generate predictions from trained models |
-| `visualize.py` | Visualize input/prediction/target comparisons |
-| `generate_configs.py` | Regenerate all 51 task configs |
-| `generate_metadata.py` | Generate dataset metadata tables |
-
-## Directory Structure
-
-```
-Baseline/
-├── mrixfields/              # Python package
-│   ├── data/                #   Dataset classes, transforms
-│   ├── models/              #   CUT, CycleGAN, StarGAN v2
-│   └── losses/              #   GAN, PatchNCE, LPIPS, SSIM
-├── configs/                 # 51 task configs
-│   ├── task1/{cut,cyclegan}/
-│   ├── task2/{cut,cyclegan}/
-│   └── task3/stargan/
-├── scripts/                 # Entry-point scripts
-└── setup.py                 # Editable install (used by environment.yml)
-```
-
-## Config Naming
-
-Format: `{source}_to_{target}_{modality}.yaml`
-
-- Fields: `0.1T`, `1.5T`, `3T`, `5T`, `7T`
-- Modalities: `T1W`, `T2W`, `T2FLAIR`
-
-See [configs/README.md](configs/README.md) for details.
+- **Wrong `eval_pipeline`**: run `eval_pipeline` commands from inside
+  `experiment-pipeline/`. From the repo root, `import eval_pipeline` resolves
+  to an unrelated editable checkout at
+  `/home/ruru/Documents/deniz/cmrx/projects/experiment-pipeline`.
+- **Default stages**: `eval_pipeline run` defaults to `--stages test`. Training
+  needs `--stages training validation` explicitly, as shown above.
+- **Task 3 has no segmentations**: don't run `segment_predictions.py` against
+  Task 3 predictions — it's voxel-metrics only (nRMSE, SSIM, LPIPS).
+- **`make_task3_submission.py`** asserts the full 180-file archive shape; use
+  `--dry-run` first to catch mismatches before writing the ZIP.
 
 ## Citation
 
