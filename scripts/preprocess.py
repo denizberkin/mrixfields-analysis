@@ -238,11 +238,13 @@ def run_extract_slices(args):
     print(f"Slice range: {SLICE_START}~{SLICE_END - 1} ({SLICE_END - SLICE_START} slices)")
 
     # Count total files
+    cap = getattr(args, "max_subjects", None)
     total_files = 0
     for split in requested_splits:
         for mod in modalities:
             for field in fields:
-                total_files += len(_list_nifti_files(data_dir, split, mod, field))
+                found = len(_list_nifti_files(data_dir, split, mod, field))
+                total_files += min(found, cap) if cap else found
 
     print(f"Found {total_files} NIfTI files")
     if args.debug:
@@ -270,6 +272,8 @@ def run_extract_slices(args):
 
                 if args.debug:
                     nifti_files = nifti_files[:1]  # 1 case only
+                elif cap:
+                    nifti_files = nifti_files[:cap]
 
                 desc = f"{abbr}/{mod}/{field}"
                 n_expected = SLICE_END - SLICE_START
@@ -364,6 +368,13 @@ def main():
                            help="Skip subjects whose full set of 220 slices already exists in output_dir.")
     p_extract.add_argument("--dtype", choices=("float16", "float32"), default="float32",
                            help="Cached image dtype (default: float32). float16 roughly halves disk usage.")
+    p_extract.add_argument("--max_subjects", type=int, default=None,
+                           help="Cap volumes taken per split/modality/field. The retrospective split is "
+                                "1939 volumes (~427k slices, ~40GB at float16) but is unpaired, so it is "
+                                "only ever consumed by the self-supervised pretraining stage -- a few tens "
+                                "of volumes per domain already exceed what that stage samples. Selection "
+                                "is the first N in sorted filename order, so the subset is deterministic "
+                                "and --skip_existing stays meaningful across runs.")
 
     args = parser.parse_args()
     if args.mode == "resample":
