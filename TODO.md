@@ -1075,3 +1075,108 @@ people try, not about what it is worth.
 - [ ] **27.3** Add a differentiable SSIM (or MS-SSIM) term to the training loss and sweep its
   weight. Smallest change on the list, aimed straight at the ranked metric, and the one lever
   where the field's naming says six teams got there first.
+
+## 28. 0.908873 — SSIM in the loss is worth +0.0021, and the sampling grid nearly hid it (2026-09-08)
+
+`components/losses/reconstruction.py::SSIMLoss` (`task3_ssim`), weight 0.5, on top of the
+multi-contrast model. Submitted as `unet_multicontrast_ssim_ep8`: **challenge SSIM 0.908873**,
+up **+0.002100** from 0.906773. nRMSE 0.241785 (-0.0018), LPIPS 0.088697 (**+0.0079**).
+
+The loss reproduces the *scorer's* SSIM rather than the Gaussian-windowed version most libraries
+ship: 7x7 uniform window, unbiased `NP/(NP-1)` covariance, border dropped -- skimage reflects and
+then crops `(win-1)//2`, which is exactly a valid-mode filter, so `avg_pool2d` with no padding is
+identical and cheaper. **Validated against skimage before use at max |diff| 3.2e-07.**
+
+### 28.1 The trade is real and it is the one we wanted
+
+LPIPS got materially worse and that is the point. SSIM with a uniform window rewards matching
+local means and variances and tolerates losing high-frequency texture; LPIPS is precisely
+sensitive to that texture. We were **3rd of 23** on LPIPS and **15th** on nRMSE with SSIM ranked,
+so spending the metric we led to buy the two that are ranked is the correct currency. It showed
+up in training at e5 (LPIPS 0.04748 against the plain run's 0.03923) and carried to the
+leaderboard at +9.7%. nRMSE improved at the same time, so this is not simply blur.
+
+### 28.2 A coarse grid nearly killed a working lever
+
+The first run used `save_every = 5`, copied from `task3_multicontrast`, whose peak was at e20.
+The SSIM term does not behave like that. Scored at e10 first, it read **0.9527** against the
+matched mc e10's 0.95706 -- and was written off as a failure. e5 then scored **0.9598**, above
+the best checkpoint in the project at the time.
+
+Replaying the run at `save_every = 1` (bit-identical: e5 returned 0.9598 again, and every epoch
+total matched to six decimals) gives the real curve:
+
+| epoch | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | (10) |
+|---|---|---|---|---|---|---|---|---|---|
+| SSIM | 0.9478 | 0.9605 | 0.9585 | 0.9506 | 0.9598 | 0.9516 | 0.9522 | **0.9606** | 0.9527 |
+
+**Adjacent epochs differ by up to 0.010 -- ten times the seed noise floor.** At weight 0.5 the
+term does not just move the optimum, it destabilises the trajectory. The rule this earns:
+**a checkpoint grid inherited from a different loss is an assumption, not a default.** One
+number from one checkpoint of an unswept schedule is not evidence about a lever.
+
+### 28.3 Checkpoint averaging does not fix an oscillation
+
+The obvious hypothesis was that averaging cancels the swing. It does not -- it interpolates:
+
+| | SSIM |
+|---|---|
+| `avg_late4` (e5-e8) | 0.9556 |
+| arithmetic mean of those four | 0.9560 |
+| `avg_good3` (e2, e5, e8) | 0.9603 |
+| best member (e8) | 0.9606 |
+| `avg_all8` | 0.9557 |
+
+So the peaks and troughs are genuinely different-quality points in weight space, not a wobble
+around a better midpoint. Section 15's +0.0009 does not improve on an unstable run.
+
+### 28.4 Cross-subject scoring picked a different checkpoint than the argmax would have
+
+On 0009 alone e2 (0.9605) and e8 (0.9606) are indistinguishable. Over all three paired subjects:
+
+| | 0009 | pooled 180 transitions | vs mc e20 | better on |
+|---|---|---|---|---|
+| mc e20 | 0.95836 | 0.95478 | — | — |
+| **mc+ssim e8** | 0.9606 | **0.95708** | **+0.00230** | **155/180** |
+| mc+ssim e2 | 0.9605 | 0.95656 | +0.00177 | 103/180 |
+
+e2 and e8 have nearly the same mean, and e8 wins on 155/180 where e2 wins on 103/180. **Picking
+by single-subject argmax would have shipped the weaker model.** Given section 14.1's subject
+spread of 0.011, scoring the final candidate on all three subjects should now be standard before
+any submission -- it costs 8 minutes.
+
+### 28.5 The calibration held for a model trained on the ranked metric
+
+Predicted ~0.909 from local 0.9606; actual 0.908873, error 0.0001. Implied offset **0.051727**
+against the pretrained regime's 0.051587 and 0.05181. Section 25.2's worry -- that a model
+trained partly on SSIM would have a different generalisation gap -- did not materialise.
+
+| regime | offset | n | sd |
+|---|---|---|---|
+| not pretrained | 0.06050 | 4 | 0.00279 |
+| **pretrained** | **0.05171** | **4** | **0.00030** |
+
+Local delta +0.00230 became challenge +0.00210, a transfer of **0.91x**.
+
+- [ ] **28.6** The weight is unswept. 0.5 works but oscillates, so the result depends on landing
+  a good checkpoint. 0.15-0.25 plausibly gives the same level with a stable curve, and may be
+  worth more outright if the oscillation is itself costing us. Two 8-epoch runs, ~2 h.
+
+## 29. 25.3 answered: multi-contrast plateaus at e20, it does not compose with a longer schedule (2026-09-08)
+
+`task3_mc_long`: resumed from `task3_multicontrast` e25 for 15 more epochs, same loss, same data.
+
+| schedule epoch | 5 | 10 | 15 | **20** | 25 | 30 | 35 | 40 |
+|---|---|---|---|---|---|---|---|---|
+| SSIM | 0.95623 | 0.95706 | 0.95756 | **0.95836** | 0.95742 | 0.95741 | 0.95681 | 0.95848 |
+
+e40 vs e20: **+0.00012 on 32/60** -- 32/60 is a coin flip and the delta is an eighth of the seed
+noise floor. Fifteen epochs and ~2 h of GPU bought nothing.
+
+One difference from section 24 worth keeping: the single-channel model became *unstable* past
+e25, with individual transitions collapsing (T2W 3T->1.5T at -0.0976). The 4-channel model does
+not do that -- it simply flattens, and nRMSE and LPIPS stay sane throughout (0.1417 / 0.0412 at
+e40). More input information appears to buy stability as well as accuracy.
+
+**Both fine-tuning schedules are now closed.** Neither the 1-channel nor the 4-channel line has
+anything past its peak, and those peaks are at e25 and e20. Long fine-tunes are done as a lever.

@@ -3,7 +3,7 @@
 % Compile from inside reports/:  ~/anaconda3/envs/tex/bin/tectonic decision_tree.tex
 \documentclass[10pt,a4paper]{article}
 
-\usepackage[margin=12mm]{geometry}
+\usepackage[margin=10mm]{geometry}
 \usepackage{tikz}
 \usepackage{xcolor}
 \usepackage[colorlinks=true,linkcolor=black,urlcolor=black]{hyperref}
@@ -48,7 +48,7 @@
 Section numbers are \texttt{TODO.md}. Scores are challenge SSIM; deltas are local.}\\[3mm]
 
 \begin{center}
-\begin{tikzpicture}[x=1cm,y=1cm]
+\begin{tikzpicture}[x=0.97cm,y=0.93cm]
 
 % ------------------------------------------------------------------ the spine
 \kept{n1}{0}      {\S8}   {copy the source}        {0.836497}
@@ -58,16 +58,14 @@ Section numbers are \texttt{TODO.md}. Scores are challenge SSIM; deltas are loca
 \kept{n5}{-8.8}   {\S18}  {+ MIM on unpaired data} {0.901633}
 \kept{n6}{-11.0}  {\S21}  {+ 30k steps, 1939 vol}  {0.903110}
 \kept{n7}{-13.2}  {\S25}  {+ multi-contrast input} {0.906773}
+\kept{n8}{-15.4}  {\S28}  {+ SSIM in the loss}     {0.908873}
 
-\foreach \a/\b in {n1/n2, n2/n3, n3/n4, n4/n5, n5/n6, n6/n7}{\draw[spine] (\a) -- (\b);}
+\foreach \a/\b in {n1/n2, n2/n3, n3/n4, n4/n5, n5/n6, n6/n7, n7/n8}{\draw[spine] (\a) -- (\b);}
 
 % ------------------------------------------------------------------ running now
-\node[now] (r1) at (-2.7,-15.9)
-  {{\bfseries \S27.3}~~SSIM in the loss\\[0.4mm]{\itshape\color{live}running}};
-\node[now] (r2) at (2.7,-15.9)
-  {{\bfseries \S25.3}~~multi-contrast past e25\\[0.4mm]{\itshape\color{live}running}};
-\draw[spine, draw=live] (n7) to[out=-90,in=90] (r1);
-\draw[spine, draw=live] (n7) to[out=-90,in=90] (r2);
+\node[now] (r1) at (0,-17.6)
+  {{\bfseries \S28.6}~~sweep the SSIM weight\\[0.4mm]{\itshape\color{live}next: 0.5 oscillates}};
+\draw[spine, draw=live] (n8) -- (r1);
 
 % ------------------------------------------------------------------ dropped
 \gone{d1}{-2.2}  {\S14} {quantile calibration alone}  {$\approx$0.849}
@@ -80,12 +78,16 @@ Section numbers are \texttt{TODO.md}. Scores are challenge SSIM; deltas are loca
 \gone{d8}{-10.7} {\S21.1}{more pretraining (60k)}     {+0.0007}
 \gone{d9}{-11.8} {\S20} {3-model ensemble}            {+0.0011}
 \gone{d10}{-12.9}{\S24} {fine-tune to 50 epochs}      {unstable}
+\gone{d11}{-14.0}{\S29} {multi-contrast past e25}     {+0.0001}
+\gone{d12}{-15.1}{\S28.3}{averaging the oscillation}  {interpolates}
 
 \draw[stub] (n2.east) to[out=0,in=180] (d1.west);
 \foreach \d in {d2,d3,d4}{\draw[stub] (n3.east) to[out=0,in=180] (\d.west);}
 \draw[stub] (n4.east) to[out=0,in=180] (d5.west);
 \foreach \d in {d6,d7}{\draw[stub] (n5.east) to[out=0,in=180] (\d.west);}
 \foreach \d in {d8,d9,d10}{\draw[stub] (n6.east) to[out=0,in=180] (\d.west);}
+\draw[stub] (n7.east) to[out=0,in=180] (d11.west);
+\draw[stub] (n8.east) to[out=0,in=180] (d12.west);
 
 % ------------------------------------------------------------------ annotations
 \node[font=\scriptsize\itshape, text=muted, text width=34mm, align=right] at (-4.4,-4.4)
@@ -94,12 +96,14 @@ Section numbers are \texttt{TODO.md}. Scores are challenge SSIM; deltas are loca
   {unpaired pretraining\\ \textbf{+0.0088}, then scale\\ saturates immediately};
 \node[font=\scriptsize\itshape, text=muted, text width=34mm, align=right] at (-4.4,-13.2)
   {four channels instead\\ of one: \textbf{+0.0037},\\ predicted within \textbf{0.0004}};
+\node[font=\scriptsize\itshape, text=muted, text width=34mm, align=right] at (-4.4,-15.4)
+  {optimising the \emph{ranked}\\ metric at last: \textbf{+0.0021},\\ spent out of LPIPS};
 
 \end{tikzpicture}
 \end{center}
 
-\vspace{-2mm}
-{\small
+\vspace{-4mm}
+{\footnotesize
 \textbf{How to read the stubs.} Every grey branch was measured, not guessed, and most were
 killed by a number rather than by taste. Three of them (\S11, \S15, \S20) are real but too
 small: $+0.0008$ to $+0.0011$ local, against a seed noise floor of $\pm0.001$ (\S16) and a
@@ -117,8 +121,15 @@ pretrain$\rightarrow$fine-tune line without it is the cheapest untested gain on 
 \emph{post-hoc trick}. Every step on the spine after the U-Net exists is a change in what the
 model gets to \emph{see}: which domains it is mapping between, 1{,}939 volumes with no paired
 target, and the other two contrasts of the same subject. With three paired subjects that is the
-binding constraint, and it is why the next two experiments are a loss term aimed at the ranked
-metric and a schedule question --- with synthetic paired data as the one lever left that
-attacks the constraint itself.}
+binding constraint. \S28 is the one exception and the first step to optimise the \emph{ranked}
+metric directly rather than a proxy for it; synthetic paired data remains the only lever left
+that attacks the constraint itself.
+
+\smallskip
+\textbf{\S28 nearly became a stub by accident.} Scored first at epoch 10, on a checkpoint grid
+inherited from a run whose peak was at epoch 20, it read 0.9527 against a matched 0.95706 and
+looked dead. Epoch 5 scored 0.9598. The trajectory swings 0.951--0.961 between adjacent epochs,
+so one checkpoint of an unswept schedule was never evidence about the lever --- only about that
+checkpoint.}
 
 \end{document}
