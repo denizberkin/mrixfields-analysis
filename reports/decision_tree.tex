@@ -1,0 +1,124 @@
+% Decision tree of the Task 3 experiments: what was kept, what was dropped, and the
+% result that decided each one. Section numbers refer to TODO.md.
+% Compile from inside reports/:  ~/anaconda3/envs/tex/bin/tectonic decision_tree.tex
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[margin=12mm]{geometry}
+\usepackage{tikz}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=black,urlcolor=black]{hyperref}
+\usetikzlibrary{positioning,arrows.meta,calc}
+
+\definecolor{keep}{HTML}{2C7A5A}
+\definecolor{keepfill}{HTML}{E8F3ED}
+\definecolor{drop}{HTML}{9AA5B1}
+\definecolor{dropfill}{HTML}{F5F7FA}
+\definecolor{live}{HTML}{B45309}
+\definecolor{livefill}{HTML}{FDF3E3}
+\definecolor{ink}{HTML}{102A43}
+\definecolor{muted}{HTML}{627D98}
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+
+\tikzset{
+  kept/.style = {draw=keep, fill=keepfill, line width=0.7pt, rounded corners=1.2pt,
+                 text width=44mm, inner sep=1.6mm, align=left, font=\footnotesize},
+  gone/.style = {draw=drop, fill=dropfill, line width=0.4pt, dashed, rounded corners=1.2pt,
+                 text width=53mm, inner sep=1.3mm, align=left, font=\scriptsize, text=muted},
+  now/.style  = {draw=live, fill=livefill, line width=0.7pt, rounded corners=1.2pt,
+                 text width=41mm, inner sep=1.5mm, align=left, font=\footnotesize},
+  spine/.style = {->, draw=keep, line width=1.1pt, >={Stealth[length=2mm]}},
+  stub/.style  = {->, draw=drop, line width=0.4pt, dashed, >={Stealth[length=1.4mm]}},
+  sec/.style   = {font=\footnotesize\bfseries, text=ink},
+}
+
+% #1 node name, #2 y, #3 section, #4 what it was, #5 result
+\newcommand{\kept}[5]{\node[kept] (#1) at (0,#2)
+  {{\bfseries #3}~~#4\\[0.4mm]{\bfseries\color{keep}#5}};}
+\newcommand{\gone}[5]{\node[gone] (#1) at (7.6,#2)
+  {\hyphenpenalty=10000\exhyphenpenalty=10000\relax
+   {\bfseries #3}~~#4 \hfill \textbf{#5}};}
+
+\begin{document}
+
+{\Large\bfseries What we tried, what we kept}\\[1mm]
+{\small Task 3, team \texttt{inzva\_mri}. \textcolor{keep}{Green spine} = changes that shipped,
+\textcolor{drop}{grey stubs} = tried and dropped, \textcolor{live}{amber} = running now.
+Section numbers are \texttt{TODO.md}. Scores are challenge SSIM; deltas are local.}\\[3mm]
+
+\begin{center}
+\begin{tikzpicture}[x=1cm,y=1cm]
+
+% ------------------------------------------------------------------ the spine
+\kept{n1}{0}      {\S8}   {copy the source}        {0.836497}
+\kept{n2}{-2.2}   {}      {vanilla / unconditional U-Net} {0.869856}
+\kept{n3}{-4.4}   {}      {+ domain conditioning}  {0.897646}
+\kept{n4}{-6.6}   {\S9}   {+ FiLM \& residual head}{0.892839}
+\kept{n5}{-8.8}   {\S18}  {+ MIM on unpaired data} {0.901633}
+\kept{n6}{-11.0}  {\S21}  {+ 30k steps, 1939 vol}  {0.903110}
+\kept{n7}{-13.2}  {\S25}  {+ multi-contrast input} {0.906773}
+
+\foreach \a/\b in {n1/n2, n2/n3, n3/n4, n4/n5, n5/n6, n6/n7}{\draw[spine] (\a) -- (\b);}
+
+% ------------------------------------------------------------------ running now
+\node[now] (r1) at (-2.7,-15.9)
+  {{\bfseries \S27.3}~~SSIM in the loss\\[0.4mm]{\itshape\color{live}running}};
+\node[now] (r2) at (2.7,-15.9)
+  {{\bfseries \S25.3}~~multi-contrast past e25\\[0.4mm]{\itshape\color{live}running}};
+\draw[spine, draw=live] (n7) to[out=-90,in=90] (r1);
+\draw[spine, draw=live] (n7) to[out=-90,in=90] (r2);
+
+% ------------------------------------------------------------------ dropped
+\gone{d1}{-2.2}  {\S14} {quantile calibration alone}  {$\approx$0.849}
+\gone{d2}{-3.7}  {}     {Swin UNETR 3D}               {0.858214}
+\gone{d3}{-4.8}  {}     {ViT / DINOv3 encoder}        {0.878918}
+\gone{d4}{-5.9}  {\S7}  {LeJEPA tubelet encoder}      {0.859000}
+\gone{d5}{-7.0}  {\S17} {FiLM+residual to 60 epochs}  {worse optimum}
+\gone{d6}{-8.3}  {\S11} {test-time augmentation}      {+0.0008}
+\gone{d7}{-9.4}  {\S15} {checkpoint averaging}        {+0.0009}
+\gone{d8}{-10.7} {\S21.1}{more pretraining (60k)}     {+0.0007}
+\gone{d9}{-11.8} {\S20} {3-model ensemble}            {+0.0011}
+\gone{d10}{-12.9}{\S24} {fine-tune to 50 epochs}      {unstable}
+
+\draw[stub] (n2.east) to[out=0,in=180] (d1.west);
+\foreach \d in {d2,d3,d4}{\draw[stub] (n3.east) to[out=0,in=180] (\d.west);}
+\draw[stub] (n4.east) to[out=0,in=180] (d5.west);
+\foreach \d in {d6,d7}{\draw[stub] (n5.east) to[out=0,in=180] (\d.west);}
+\foreach \d in {d8,d9,d10}{\draw[stub] (n6.east) to[out=0,in=180] (\d.west);}
+
+% ------------------------------------------------------------------ annotations
+\node[font=\scriptsize\itshape, text=muted, text width=34mm, align=right] at (-4.4,-4.4)
+  {conditioning is worth\\ \textbf{+0.0278} --- the largest\\ single step in the file};
+\node[font=\scriptsize\itshape, text=muted, text width=34mm, align=right] at (-4.4,-9.9)
+  {unpaired pretraining\\ \textbf{+0.0088}, then scale\\ saturates immediately};
+\node[font=\scriptsize\itshape, text=muted, text width=34mm, align=right] at (-4.4,-13.2)
+  {four channels instead\\ of one: \textbf{+0.0037},\\ predicted within \textbf{0.0004}};
+
+\end{tikzpicture}
+\end{center}
+
+\vspace{-2mm}
+{\small
+\textbf{How to read the stubs.} Every grey branch was measured, not guessed, and most were
+killed by a number rather than by taste. Three of them (\S11, \S15, \S20) are real but too
+small: $+0.0008$ to $+0.0011$ local, against a seed noise floor of $\pm0.001$ (\S16) and a
+between-subject spread of $0.011$ (\S14.1) --- effects that cannot be told apart from noise on
+three training subjects should not spend a submission slot.
+
+\textbf{One branch is on the spine but should be a stub.} \S9's FiLM+residual head scored
+\emph{below} the plain conditional U-Net it replaced ($-0.0048$), and \S17's 60-epoch run
+confirmed it converges to a worse optimum. It survives only because the pretraining line was
+built on that checkpoint rather than on the plain one, so every score from 0.901633 down carries
+a component whose one controlled comparison says it costs $\approx0.005$. Re-running the
+pretrain$\rightarrow$fine-tune line without it is the cheapest untested gain on the board.
+
+\textbf{What the shape of the tree says.} Every stub on the right is an \emph{architecture} or a
+\emph{post-hoc trick}. Every step on the spine after the U-Net exists is a change in what the
+model gets to \emph{see}: which domains it is mapping between, 1{,}939 volumes with no paired
+target, and the other two contrasts of the same subject. With three paired subjects that is the
+binding constraint, and it is why the next two experiments are a loss term aimed at the ranked
+metric and a schedule question --- with synthetic paired data as the one lever left that
+attacks the constraint itself.}
+
+\end{document}
