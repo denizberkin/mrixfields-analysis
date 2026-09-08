@@ -44,7 +44,7 @@
 
 {\Large\bfseries What we tried, what we kept}\\[1mm]
 {\small Task 3, team \texttt{inzva\_mri}. \textcolor{keep}{Green spine} = changes that shipped,
-\textcolor{drop}{grey stubs} = tried and dropped, \textcolor{live}{amber} = running now.
+\textcolor{drop}{grey stubs} = tried and dropped.
 Section numbers are \texttt{TODO.md}. Scores are challenge SSIM; deltas are local.}\\[3mm]
 
 \begin{center}
@@ -62,11 +62,6 @@ Section numbers are \texttt{TODO.md}. Scores are challenge SSIM; deltas are loca
 
 \foreach \a/\b in {n1/n2, n2/n3, n3/n4, n4/n5, n5/n6, n6/n7, n7/n8}{\draw[spine] (\a) -- (\b);}
 
-% ------------------------------------------------------------------ running now
-\node[now] (r1) at (0,-17.6)
-  {{\bfseries \S28.6}~~sweep the SSIM weight\\[0.4mm]{\itshape\color{live}next: 0.5 oscillates}};
-\draw[spine, draw=live] (n8) -- (r1);
-
 % ------------------------------------------------------------------ dropped
 \gone{d1}{-2.2}  {\S14} {quantile calibration alone}  {$\approx$0.849}
 \gone{d2}{-3.7}  {}     {Swin UNETR 3D}               {0.858214}
@@ -80,6 +75,7 @@ Section numbers are \texttt{TODO.md}. Scores are challenge SSIM; deltas are loca
 \gone{d10}{-12.9}{\S24} {fine-tune to 50 epochs}      {unstable}
 \gone{d11}{-14.0}{\S29} {multi-contrast past e25}     {+0.0001}
 \gone{d12}{-15.1}{\S28.3}{averaging the oscillation}  {interpolates}
+\gone{d13}{-16.2}{\S28.6}{SSIM weight 0.10 / 0.25}   {0.5 wins}
 
 \draw[stub] (n2.east) to[out=0,in=180] (d1.west);
 \foreach \d in {d2,d3,d4}{\draw[stub] (n3.east) to[out=0,in=180] (\d.west);}
@@ -87,7 +83,7 @@ Section numbers are \texttt{TODO.md}. Scores are challenge SSIM; deltas are loca
 \foreach \d in {d6,d7}{\draw[stub] (n5.east) to[out=0,in=180] (\d.west);}
 \foreach \d in {d8,d9,d10}{\draw[stub] (n6.east) to[out=0,in=180] (\d.west);}
 \draw[stub] (n7.east) to[out=0,in=180] (d11.west);
-\draw[stub] (n8.east) to[out=0,in=180] (d12.west);
+\foreach \d in {d12,d13}{\draw[stub] (n8.east) to[out=0,in=180] (\d.west);}
 
 % ------------------------------------------------------------------ annotations
 \node[font=\scriptsize\itshape, text=muted, text width=34mm, align=right] at (-4.4,-4.4)
