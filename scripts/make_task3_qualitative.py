@@ -27,7 +27,10 @@ import torch
 ROOT = Path(__file__).resolve().parent.parent
 sys.path[:0] = [str(ROOT), str(ROOT / "experiment-pipeline")]
 
-from components.models.conditional_unet import ConditionalUNet  # noqa: E402
+from components.models.conditional_unet import (  # noqa: E402
+    ConditionalUNet,
+    unet_from_state_dict,
+)
 from mrixfields.data.transforms import CenterCropOrPad  # noqa: E402
 from mrixfields.data.utils import get_joint_domain, load_nifti  # noqa: E402
 from mrixfields.env import get_data_dir  # noqa: E402
@@ -197,9 +200,12 @@ def main() -> None:
     if device.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError(f"CUDA is unavailable: {device}")
 
-    model = ConditionalUNet(base_channels=32, max_channels=512, levels=4)
+    # Read the architecture off the checkpoint rather than hardcoding it: the
+    # widths follow whatever config trained it, and the residual head and
+    # per-scale FiLM arms move key names, so a fixed constructor silently
+    # excludes those checkpoints.
     checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=True)
-    model.load_state_dict(checkpoint["model"])
+    model = unet_from_state_dict(checkpoint.get("model", checkpoint))
     model.to(device).eval()
 
     data_dir = Path(get_data_dir())
