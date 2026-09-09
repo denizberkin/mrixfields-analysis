@@ -1341,3 +1341,67 @@ slices, neighbour blocks differ on 17/18 and 18/18, one boundary correctly repli
 Expected value, stated before the result: multi-contrast bought +0.0037 by disambiguating tissue,
 and a through-plane neighbour is a weaker signal than a different contrast, so **+0.001 to +0.003**
 -- which straddles section 32's measurability floor. Best-shaped idea left, not a gap-closer.
+
+## 35. The field axis is a composable near-affine intensity flow -- but the flow is per subject (2026-09-10)
+
+`scripts/field_transfer_analysis.py` and `scripts/field_transfer_figures.py`, on the three
+paired subjects, all modalities, ~400k masked voxels each. Figure at
+`reports/figures/field_transfer.png`.
+
+**1. The pointwise relation is near-affine, and a curve buys almost nothing.** Fitting the best
+possible monotone pointwise map (per-quantile median) against a plain line, T1W:
+
+| pair | affine R2 | best curve R2 | resid sd | gain a |
+|---|---|---|---|---|
+| 0.1T->1.5T | 0.7708 | 0.7996 | 0.0558 | 0.649 |
+| 1.5T->3T | 0.8260 | 0.8505 | 0.0604 | 1.140 |
+| 3T->5T | 0.7244 | 0.7244 | 0.0300 | 0.321 |
+| 5T->7T | 0.5458 | 0.5919 | 0.0529 | 1.042 |
+
+The curve beats the line by at most 0.03 R2 and by exactly 0.0000 on 3T->5T. **There is no
+clever nonlinear intensity mapping hiding in this data.**
+
+**2. But a pointwise map, even the best one, explains only 55-88%.** The other 12-45% is
+spatial: the difference maps show grey/white-matter structure, not noise. That remainder is
+precisely what a model has to learn, and it is why the identity already scores 0.836 while
+nothing has passed 0.917.
+
+**3. The curves compose.** T(i->j) then T(j->k) against T(i->k) loses 0.002-0.013 R2 across
+every triple and modality. **At the intensity level the field axis really is a one-parameter
+flow** -- the thing that would have to be true for synthetic intermediate fields.
+
+**4. And it is useless anyway, because the flow is subject-specific.** Curves fitted on
+0006+0007, applied to 0009 (T1W):
+
+| pair | fitted on 0009 | fitted on 0006+0007 | drop |
+|---|---|---|---|
+| 0.1T->1.5T | 0.7700 | 0.5506 | 0.219 |
+| 1.5T->3T | 0.8165 | 0.7435 | 0.073 |
+| 3T->5T | 0.8060 | 0.7249 | 0.081 |
+| 5T->7T | 0.6915 | **-12.08** | 12.77 |
+
+A negative R2 of -12 is worse than predicting the mean by an order of magnitude. This is the
+**third independent route to the same wall**: section 31 (weighting 0.1T's loss makes it worse),
+section 27 (the noise model is unidentifiable), and now the intensity flow itself. Every
+attempt to learn a subject-independent field relation from three subjects has failed.
+
+**5. Methodological trap, recorded so it is not walked into again.** `corr(B-A, C-B)` is
+negatively biased *by construction* -- B enters the two terms with opposite signs, so for
+independent equal-variance fields the expected correlation is **-0.5, not 0**. The raw adjacent
+correlations (-0.10, -0.67, -0.60 for T1W) are therefore not evidence of anything on their own.
+Only field pairs sharing no term are interpretable: (7T-5T) against (3T-1.5T) gives **-0.305**,
+so there is a real but modest anti-correlation once the artifact is removed.
+
+**6. The sign of the differences alternates, and the gains alternate with it** (0.649, 1.140,
+0.321, 1.042 -- around 1, up and down). 1.5T-0.1T is mostly negative, 3T-1.5T positive, 5T-3T
+strongly negative, 7T-5T faintly negative. A physical field progression would not alternate;
+per-field intensity normalisation would. So a large part of "field translation" in this dataset
+is per-domain intensity calibration, which the domain embeddings and FiLM already exist to
+absorb.
+
+**What this suggests, untested.** If 55-88% of each transition is a per-domain affine, the
+residual head could start from a *fitted per-domain affine* rather than from identity
+(`y = a_d x + b_d + f(x)`, with a_d, b_d initialised from the table above) so capacity goes to
+the spatial remainder instead of re-deriving the gain. Cheap to implement and in the same
+zero-init spirit as everything else on the spine. Not attempted: section 32's floor means the
+gain would have to exceed ~0.001 to be visible, and there is under a day left.
