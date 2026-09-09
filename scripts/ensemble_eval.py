@@ -88,7 +88,13 @@ def main() -> None:
 
     models = [load_member(p, device) for p in args.checkpoint]
     names = [p.parent.parent.name + "/" + p.stem for p in args.checkpoint]
-    print(f"ensemble of {len(models)}: " + ", ".join(names), flush=True)
+    # Members may mix input widths: the multi-contrast line (section 25) takes the
+    # 4-channel (primary, T1W, T2W, T2FLAIR) stack while everything before it takes one
+    # volume. Read the width off each member's first conv and feed it the matching input,
+    # so a 1-channel and a 4-channel member ensemble together.
+    widths = [int(m.encoders[0][0].weight.shape[1]) for m in models]
+    print("ensemble of {}: ".format(len(models))
+          + ", ".join(f"{n} [{w}ch]" for n, w in zip(names, widths)), flush=True)
     print(f"subjects: {subjects}\n", flush=True)
 
     lpips_fn = PerceptualLoss(net="alex").to(device).eval()
@@ -97,15 +103,18 @@ def main() -> None:
     rows = []
 
     for subject in subjects:
+        cache = {m: {f: EH.cached_volume(split_dir, m, f, subject) for f in EH.FIELDS}
+                 for m in EH.MODALITIES}
+        if axial_first:
+            # Match eval_holdout: (x, y, z) -> (z, x, y) so SSIM is averaged over axial
+            # slices, which is the plane the training layout and the challenge use.
+            # Omitting this scores a different anatomical plane and silently produces
+            # numbers that cannot be compared with any other report in this repo.
+            cache = {m: {f: (None if v is None else v.transpose(2, 0, 1))
+                         for f, v in per_field.items()}
+                     for m, per_field in cache.items()}
         for modality in EH.MODALITIES:
-            volumes = {f: EH.cached_volume(split_dir, modality, f, subject) for f in EH.FIELDS}
-            if axial_first:
-                # Match eval_holdout: (x, y, z) -> (z, x, y) so SSIM is averaged over axial
-                # slices, which is the plane the training layout and the challenge use.
-                # Omitting this scores a different anatomical plane and silently produces
-                # numbers that cannot be compared with any other report in this repo.
-                volumes = {f: (None if v is None else v.transpose(2, 0, 1))
-                           for f, v in volumes.items()}
+            volumes = cache[modality]
             for src in EH.FIELDS:
                 for tgt in EH.FIELDS:
                     if src == tgt or volumes[src] is None or volumes[tgt] is None:
@@ -114,8 +123,19 @@ def main() -> None:
                     target = np.asarray(volumes[tgt], np.float32)
                     sd, td = EH.joint_domain(modality, src), EH.joint_domain(modality, tgt)
 
-                    preds = [EH.predict(m, source, sd, td, device, 0, args.batch)
-                             for m in models]
+                    stacked = None
+                    if any(w > 1 for w in widths):
+                        auxiliary = [cache[m][src] for m in EH.MODALITIES]
+                        if any(v is None for v in auxiliary):
+                            # A missing contrast is skipped rather than zero-filled: zero is
+                            # a legitimate intensity here, so an imputed channel would be
+                            # indistinguishable from data.
+                            continue
+                        stacked = np.stack([np.asarray(v, np.float32)
+                                            for v in [source, *auxiliary]])
+                    preds = [EH.predict(m, stacked if w > 1 else source, sd, td,
+                                        device, 0, args.batch)
+                             for m, w in zip(models, widths)]
                     row = {"subject": subject, "modality": modality,
                            "source": src, "target": tgt}
                     mean_pred = np.mean(preds, axis=0)
