@@ -1234,3 +1234,34 @@ have been attacking a ceiling, not a deficit.**
 
 Implementation note: `low_field_weight` defaults to 0.0 and every new path is behind
 `if low_field_weight > 0.0`, so all configs predating this keep their trajectories bit-identical.
+
+## 32. The local score cannot resolve differences below ~0.001, measured (2026-09-09)
+
+`mc_ssim_long_ep12` submitted. **Challenge SSIM 0.908645, against e8's 0.908873 -- worse by
+0.00023**, and worse on all three metrics (nRMSE 0.245014 vs 0.241785, LPIPS 0.089011 vs
+0.088697).
+
+It was picked properly: better than e8 on 0009 (+0.0014), better on held-out 0006+0007 (+0.0001),
+better on all 180 transitions pooled (+0.00053), and 24% better on local LPIPS. Every check we
+had said take it.
+
+The reason it still failed is the calibration offset itself moving:
+
+| checkpoint | local (180) | challenge | offset |
+|---|---|---|---|
+| e8  | 0.95707 | 0.908873 | 0.048197 |
+| e12 | 0.95760 | 0.908645 | 0.048955 |
+
+**The offset drifts by 0.00076 between two checkpoints of the same run -- larger than the 0.00053
+local edge being chased.** Three paired subjects cannot resolve differences of this size, no
+matter how carefully the checkpoint is selected, because the held-out set and the challenge set
+disagree by more than the effect.
+
+The operational rule: **a local delta under ~0.001 is not evidence.** Applied retroactively it is
+consistent with everything -- TTA (+0.0008), checkpoint averaging (+0.0009) and the 3-model
+ensemble (+0.0011) were all correctly declined, and section 30's compression finding (0009 ranks
+correctly but inflates margins ~2.5x) means a 0009-only margin needs to clear ~0.0025 before it
+means anything at all.
+
+This also closes the "more epochs, more spikes, pick the best" line: harvesting additional 0.960
+spikes is only useful if the ruler can tell them apart, and it cannot.
