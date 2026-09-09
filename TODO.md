@@ -1202,3 +1202,35 @@ e40). More input information appears to buy stability as well as accuracy.
 
 **Both fine-tuning schedules are now closed.** Neither the 1-channel nor the 4-channel line has
 anything past its peak, and those peaks are at e25 and e20. Long fine-tunes are done as a lever.
+
+## 31. The 0.1T deficit is information-limited, not under-fitted: weighting its loss makes it worse (2026-09-09)
+
+`task3_mc_low01` = `task3_mc_ssim_long` plus two keys, `low_field_weight = 0.5` and
+`low_field_ends = "either"`. The weight is not a guess: 40% of samples touch 0.1T, so
+0.4(1+w)/(0.4(1+w)+0.6) = 0.5 solves at w = 0.5, the value that makes 0.1T's share of the loss
+equal its share of the error. 20 epochs, `save_every = 1`, everything else identical.
+
+**Best-of-20 0.9603 (e3) against the baseline's 0.9620 (e12); mean delta over all twenty matched
+epochs -0.0017.** Per-field, comparing each run's best checkpoint on 0009:
+
+| cell | baseline | weighted | delta |
+|---|---|---|---|
+| 0.1T as source *(weighted)* | 0.9514 | 0.9471 | **-0.0043** |
+| 0.1T as target *(weighted)* | 0.9604 | 0.9614 | **+0.0010** |
+| 0.1T-touching (24) | 0.9559 | 0.9543 | -0.0016 |
+| everything else (36) | 0.9661 | 0.9643 | -0.0018 |
+
+**Mapping from 0.1T got worse despite being the thing upweighted**, and the two groups degraded by
+the same amount, so there was no trade-off to speak of -- the extra gradient bought nothing
+anywhere. The single cell that improved is 0.1T *as target*, the information-*destruction*
+direction. That is the asymmetry section 30's error decomposition hinted at, now measured:
+low-field to high-field cannot be fixed by allocating more loss to it, because the information is
+not in the input. LPIPS also degrades monotonically through the run (0.045 -> 0.115) while the
+baseline stays near 0.05.
+
+With the noise analysis (section 27) reaching the same conclusion from the marginal-distribution
+side, the 0.1T line is closed on evidence: **synthetic data and noise reparameterisation would
+have been attacking a ceiling, not a deficit.**
+
+Implementation note: `low_field_weight` defaults to 0.0 and every new path is behind
+`if low_field_weight > 0.0`, so all configs predating this keep their trajectories bit-identical.
