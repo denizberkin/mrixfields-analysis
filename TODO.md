@@ -1265,3 +1265,79 @@ means anything at all.
 
 This also closes the "more epochs, more spikes, pick the best" line: harvesting additional 0.960
 spikes is only useful if the ruler can tell them apart, and it cannot.
+
+## 33. De-confounding section 9: re-running the pretraining line without FiLM+residual (2026-09-10, running)
+
+Every score from 0.901633 to 0.908873 sits on the FiLM+residual architecture, whose one
+controlled comparison scored it **below** the plain conditional U-Net it replaced (0.892839 vs
+0.897646, -0.0048), with section 17's 60-epoch run confirming a worse optimum. It survives on the
+spine only because the pretraining line happened to be built on that checkpoint.
+
+Launched 01:22. `configs/task3_retro_pretrain_plain.toml` then `configs/task3_mc_ssim_plain.toml`
+mirror the exact chain to 0.908873 with **two keys flipped and nothing else**:
+`residual_output = false`, `film_conditioning = false`. MIM pretrain -> 25-epoch 1-channel
+fine-tune -> widen to 4 channels -> 12-epoch multi-contrast + SSIM fine-tune.
+
+One shortcut: 12k pretrain steps rather than 30k. Section 21.1 measured that gap at +0.0007, an
+order of magnitude under the ~0.005 being tested, and it buys back ~3 h.
+
+Why this and not something else: section 32 established the local score cannot resolve deltas
+under ~0.001, and section 30 that a 0009-only margin needs ~0.0025. **This is the only remaining
+lever whose predicted effect clears its own measurement floor.** Chain script at
+`$SP/chain_plain.sh`; both configs are committed, so it re-runs from the repo alone.
+
+Risk noted before the result: the -0.0048 was measured *before* pretraining, and pretraining may
+already have absorbed the deficit. Score on the pooled 180 transitions, not 0009 alone.
+
+## 34. 2.5D input: the multi-contrast block repeated at neighbouring axial slices (2026-09-10)
+
+Extends section 25's multi-contrast input with through-plane context, at first-convolution cost
+only. Input becomes **12 channels = 4 contrasts x 3 slices**, laid out as blocks:
+
+| channels | content |
+|---|---|
+| 0-3 | (primary, T1W, T2W, T2FLAIR) at x -- *existing weights* |
+| 4-7 | the same block at x-2 -- zero-init |
+| 8-11 | the same block at x+2 -- zero-init |
+
+Centre block first, so `widen_input_channels.py` carries the existing 4 channels at their existing
+indices and zeroes the rest: **epoch 0 is `mc_ssim_fine` e8 exactly** and the neighbours can only
+add. Same discipline as the residual head, the FiLM projections and the 1->4 widening.
+
+**Offsets are +/-2, not +/-1, and that is measured.** Adjacent-slice SSIM at 0.5 mm isotropic:
+
+| | x+1 | x+2 | x+3 | x+5 | x+8 |
+|---|---|---|---|---|---|
+| T1W 3T | 0.9619 | 0.8943 | 0.8338 | 0.7489 | 0.6840 |
+| T1W 0.1T | 0.9918 | 0.9721 | 0.9471 | 0.8930 | 0.8225 |
+| T2FLAIR 3T | 0.9932 | 0.9758 | 0.9516 | 0.8942 | 0.8099 |
+| T2FLAIR 0.1T | 0.9951 | 0.9847 | 0.9700 | 0.9328 | 0.8712 |
+
+Three of four cells put x+1 at 0.99+, i.e. nearly the same image: little marginal information, and
+the through-plane gradient the model would extract is a difference of near-identical images, so
+noise-dominated. x+2 sits at 0.894-0.985 -- different everywhere, still 1 mm away.
+
+Symmetric, not one-sided: the target is slice x, so a forward-only window (x, x+1, x+2) would force
+the model to learn a superior/inferior asymmetry the anatomy does not have.
+
+Implementation, all behind defaults so **every config predating this keeps its trajectory
+bit-identical** (`neighbour_offsets` defaults to empty):
+
+- `mrixfields/data/cached_dataset.py` -- `CachedMultiContrastDataset(neighbour_offsets=...)`.
+  Neighbours are looked up by slice key (`0006_s072` -> `0006_s070`); a missing neighbour falls
+  back to the centre slice rather than zeros, because zero is a legitimate intensity here.
+- `experiment-pipeline/components/data/task3.py` -- `neighbour_offsets` config key, rejects 0.
+- `scripts/widen_input_channels.py` -- generalised from "1 channel only" to any current width.
+- `scripts/eval_holdout.py` -- reads the offsets from the config, shifts with edge clamping.
+- `scripts/make_task3_submission.py` -- `--neighbour-offsets`, plus a guard that refuses to run
+  when `4 * (1 + len(offsets)) != input_channels`. A 2.5D checkpoint is indistinguishable from a
+  plain multi-contrast one except by channel count, and the wrong layout would silently
+  mispredict all 180 volumes.
+
+Verified before training: centre block bit-identical to the 4-channel input on 18/18 sampled
+slices, neighbour blocks differ on 17/18 and 18/18, one boundary correctly replicated, and the
+4 -> 12 widening leaves every other tensor untouched.
+
+Expected value, stated before the result: multi-contrast bought +0.0037 by disambiguating tissue,
+and a through-plane neighbour is a weaker signal than a different contrast, so **+0.001 to +0.003**
+-- which straddles section 32's measurability floor. Best-shaped idea left, not a gap-closer.
