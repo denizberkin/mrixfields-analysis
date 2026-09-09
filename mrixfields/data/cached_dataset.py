@@ -16,6 +16,7 @@ Three dataset types mirror the on-the-fly versions in dataset.py:
 """
 
 import random
+import re
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -196,10 +197,12 @@ class CachedMultiContrastDataset(Dataset):
         input_modalities: Optional[Tuple[str, ...]] = None,
         crop_size: Optional[Tuple[int, int]] = None,
         transform: Optional[Callable] = None,
+        neighbour_offsets: Tuple[int, ...] = (),
     ):
         self.preprocessed_dir = Path(preprocessed_dir)
         self.transform = transform or _cached_transform(crop_size)
         self.input_modalities = tuple(input_modalities or MODALITIES)
+        self.neighbour_offsets = tuple(neighbour_offsets)
         self.target_modality = target_modality
         if target_modality not in self.input_modalities:
             raise ValueError(
@@ -232,17 +235,41 @@ class CachedMultiContrastDataset(Dataset):
         # missing one contrast is dropped rather than zero-filled: a zero channel is a
         # legitimate intensity here, so imputing one would be indistinguishable from data.
         self.samples: List[Tuple[Tuple[Path, ...], Path]] = []
+        self.neighbours: List[Tuple[Tuple[Path, ...], ...]] = []
         for target_path in target_files:
             key = _pair_key(target_path)
             if all(key in lookups[m] for m in self.input_modalities):
-                self.samples.append(
-                    (tuple(lookups[m][key] for m in self.input_modalities), target_path)
-                )
+                centre = tuple(lookups[m][key] for m in self.input_modalities)
+                self.samples.append((centre, target_path))
+                if self.neighbour_offsets:
+                    self.neighbours.append(tuple(
+                        self._neighbour_paths(lookups, key, offset, centre)
+                        for offset in self.neighbour_offsets
+                    ))
         if not self.samples:
             raise ValueError(
                 f"No slices where {self.input_modalities} at {source_field} and "
                 f"{target_modality} at {target_field} all exist for the same subject."
             )
+
+    def _neighbour_paths(self, lookups, key: str, offset: int,
+                         centre: Tuple[Path, ...]) -> Tuple[Path, ...]:
+        """Paths for the same modalities at slice ``key + offset``, per modality.
+
+        A neighbour that does not exist -- the top or bottom of the volume, or a slice
+        preprocessing dropped -- falls back to the centre slice rather than to zeros. Zero is
+        a legitimate intensity in this data, so a zero-filled channel would be
+        indistinguishable from a genuinely dark slice; repeating the centre instead makes the
+        boundary case degrade smoothly to the 4-channel model this one is seeded from.
+        """
+        match = re.fullmatch(r"(.+)_s(\d+)", key)
+        if match is None:
+            return centre
+        stem, index = match.group(1), int(match.group(2))
+        width = len(match.group(2))
+        shifted = f"{stem}_s{index + offset:0{width}d}"
+        return tuple(lookups[m].get(shifted, centre[i])
+                     for i, m in enumerate(self.input_modalities))
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -251,7 +278,14 @@ class CachedMultiContrastDataset(Dataset):
         source_paths, target_path = self.samples[index]
         auxiliary = [self.transform(np.load(p)["image"]) for p in source_paths]
         primary = auxiliary[self.input_modalities.index(self.target_modality)]
-        source = torch.cat([primary, *auxiliary], dim=0)
+        channels = [primary, *auxiliary]
+        # 34: 2.5D context. Each offset appends the same (primary, T1W, T2W, T2FLAIR) block
+        # read at a neighbouring slice, after the centre block, so a 4-channel checkpoint
+        # widened with zeros for the new channels starts bit-identical to itself.
+        for offset_paths in self.neighbours[index] if self.neighbour_offsets else ():
+            near = [self.transform(np.load(p)["image"]) for p in offset_paths]
+            channels.extend([near[self.input_modalities.index(self.target_modality)], *near])
+        source = torch.cat(channels, dim=0)
         target = self.transform(np.load(target_path)["image"])
         return {"source": source, "target": target}
 

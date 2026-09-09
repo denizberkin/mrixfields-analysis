@@ -109,7 +109,8 @@ def derive_decoder_channels(state: dict[str, torch.Tensor]) -> int:
 
 
 def build_model(
-    architecture: str, checkpoint: Path, device: torch.device, backbone: str
+    architecture: str, checkpoint: Path, device: torch.device, backbone: str,
+    neighbour_offsets: tuple[int, ...] = ()
 ) -> torch.nn.Module:
     """Construct the architecture and load weights strictly.
 
@@ -148,6 +149,18 @@ def build_model(
         # multi-contrast checkpoint builds the model it was trained as instead of
         # failing in load_state_dict against the 1-channel default.
         input_channels = int(weights["encoders.0.0.weight"].shape[1])
+        # 34: a 2.5D checkpoint is indistinguishable from a plain multi-contrast one except
+        # by its channel count, and shipping the wrong layout would silently mispredict all
+        # 180 volumes. Refuse rather than guess.
+        offsets = tuple(neighbour_offsets)
+        if input_channels > 1:
+            expected = 4 * (1 + len(offsets))
+            if expected != input_channels:
+                raise SystemExit(
+                    f"checkpoint expects input_channels={input_channels} but "
+                    f"--neighbour-offsets {list(offsets)} builds {expected}. Pass "
+                    f"{input_channels // 4 - 1} offsets."
+                )
         print(
             f"derived from checkpoint: residual_output={residual_output} "
             f"film_conditioning={film_conditioning} input_channels={input_channels}",
@@ -215,6 +228,7 @@ def predict_slab(
     batch_size: int,
     tta: bool = False,
     auxiliary: list[np.ndarray] | None = None,
+    neighbour_offsets: tuple[int, ...] = (),
 ) -> np.ndarray:
     """Predict the submission slab only. Copied from
     experiment-pipeline/scripts/inference_task3_conditional_unet.py so the two
@@ -229,7 +243,11 @@ def predict_slab(
     the fixed (T1W, T2W, T2FLAIR) order of CachedMultiContrastDataset. They become
     channels 1..3 behind ``volume`` itself on channel 0, which is the layout the
     multi-contrast model was trained on -- channel 0 duplicates the contrast being
-    predicted, and the duplication is what let the single-channel weights transfer."""
+    predicted, and the duplication is what let the single-channel weights transfer.
+
+    ``neighbour_offsets`` repeats that whole block at neighbouring axial slices (section 34),
+    centre first then one block per offset, which is CachedMultiContrastDataset's layout.
+    Indices clamp to the volume, matching the dataset's fall-back to the centre slice."""
     start, stop = Z_CLIP_RANGE
     crop = CenterCropOrPad(CROP_SIZE)
     uncrop = CenterCropOrPad(volume.shape[:2])
@@ -238,8 +256,16 @@ def predict_slab(
     for batch_start in range(start, stop, batch_size):
         indices = range(batch_start, min(batch_start + batch_size, stop))
         channels = [volume, *auxiliary] if auxiliary else [volume]
-        slices = np.stack([[crop(channel[:, :, index]) for channel in channels]
-                           for index in indices])
+        depth = volume.shape[2]
+
+        def block(index: int) -> list[np.ndarray]:
+            clamped = min(max(index, 0), depth - 1)
+            return [crop(channel[:, :, clamped]) for channel in channels]
+
+        slices = np.stack([
+            block(index) + [plane for offset in neighbour_offsets
+                            for plane in block(index + offset)]
+            for index in indices])
         images = torch.from_numpy(slices).to(device=device, dtype=torch.float32)
         images = images.mul(2).sub(1)
         source = torch.full((len(slices),), source_domain, device=device, dtype=torch.long)
@@ -369,6 +395,7 @@ def predict_to_slab_image(
     architecture: str = "",
     tta: bool = False,
     auxiliary_paths: list[Path] | None = None,
+    neighbour_offsets: tuple[int, ...] = (),
 ) -> nib.Nifti1Image:
     """Run the model on one volume and return the clipped submission slab.
 
@@ -398,7 +425,7 @@ def predict_to_slab_image(
                      if auxiliary_paths else None)
         prediction = predict_slab(
             model, volume, source_domain, target_domain, device, batch_size, tta=tta,
-            auxiliary=auxiliary,
+            auxiliary=auxiliary, neighbour_offsets=neighbour_offsets,
         )
 
     # Zero the background using the source volume, matching the inference script.
@@ -448,6 +475,9 @@ def main() -> None:
                         help="defaults to SUBMISSION_DIR/<name> from .env")
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--neighbour-offsets", type=int, nargs="*", default=[],
+                        help="2.5D axial offsets, e.g. -2 2. Must satisfy "
+                             "4 * (1 + len(offsets)) == the checkpoint's input_channels.")
     parser.add_argument("--tta", action="store_true",
                         help="average the four in-plane flips; 2D architectures only")
     parser.add_argument("--dry-run", action="store_true", help="list the work without writing")
@@ -495,7 +525,8 @@ def main() -> None:
     device = torch.device(args.device)
     if device.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError(f"CUDA is unavailable: {device}")
-    model = build_model(args.architecture, args.checkpoint, device, args.backbone)
+    model = build_model(args.architecture, args.checkpoint, device, args.backbone,
+                        neighbour_offsets=tuple(args.neighbour_offsets))
     # The model itself decides whether the other contrasts are needed; nothing here is
     # a flag the caller could get wrong.
     first_conv = next((p for n, p in model.named_parameters()
@@ -540,6 +571,7 @@ def main() -> None:
                     architecture=args.architecture,
                     tta=args.tta,
                     auxiliary_paths=auxiliary_paths,
+                    neighbour_offsets=tuple(args.neighbour_offsets),
                 )
                 if clipped.shape != EXPECTED_SHAPE:
                     raise RuntimeError(

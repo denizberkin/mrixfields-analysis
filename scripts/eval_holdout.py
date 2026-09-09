@@ -192,12 +192,18 @@ def score(pred: np.ndarray, target: np.ndarray, lpips_fn, device) -> dict[str, f
 
 def evaluate(model, split_dir: Path, subjects: list[str], device: torch.device,
              depth: int, batch: int, axial_first: bool = False,
-             tta: bool = False, multicontrast: bool = False) -> list[dict]:
+             tta: bool = False, multicontrast: bool = False,
+             neighbour_offsets: tuple[int, ...] = ()) -> list[dict]:
     """Score one model over every field transition of every modality.
 
     With ``multicontrast`` the input is the 4-channel (primary, T1W, T2W, T2FLAIR) stack
     of CachedMultiContrastDataset: channel 0 duplicates the contrast being predicted and
     the auxiliaries keep the fixed MODALITIES order, all read at the *source* field.
+
+    ``neighbour_offsets`` appends that same 4-channel block re-read at neighbouring axial
+    slices (section 34), matching CachedMultiContrastDataset's layout exactly: centre block
+    first, then one block per offset in order. Out-of-volume slices clamp to the edge, which
+    is the array equivalent of the dataset's fall-back to the centre slice.
     """
     from mrixfields.losses.perceptual import PerceptualLoss
 
@@ -234,6 +240,12 @@ def evaluate(model, split_dir: Path, subjects: list[str], device: torch.device,
                                 continue
                             source = np.stack([np.asarray(v, np.float32)
                                                for v in [source, *auxiliary]])
+                            if neighbour_offsets:
+                                depth_axis = source.shape[1]
+                                index = np.arange(depth_axis)
+                                source = np.concatenate(
+                                    [source] + [source[:, np.clip(index + o, 0, depth_axis - 1)]
+                                                for o in neighbour_offsets], axis=0)
                         pred = predict(model, source, joint_domain(modality, src),
                                        joint_domain(modality, tgt), device, depth, batch,
                                        tta=tta)
@@ -293,9 +305,12 @@ def main() -> None:
     # The number of input channels is a property of the model, so read it there rather
     # than from the data section: a config whose model takes 4 channels must be fed 4.
     multicontrast = int(config["model"]["params"].get("input_channels", 1)) > 1
+    neighbour_offsets = tuple(int(o) for o in
+                              config.get("data", {}).get("params", {}).get("neighbour_offsets", ()))
     print(f"held-out subjects: {subjects} | {'volumetric depth %d' % depth if depth else '2D'} "
           f"| {len(checkpoints)} checkpoint(s)"
-          f"{' | 4-channel multi-contrast input' if multicontrast else ''}\n", flush=True)
+          f"{' | 4-channel multi-contrast input' if multicontrast else ''}"
+          f"{f' | 2.5D offsets {neighbour_offsets}' if neighbour_offsets else ''}\n", flush=True)
 
     summary = []
     for path in checkpoints:
@@ -304,7 +319,8 @@ def main() -> None:
         model = None if path is None else build_model(config, path, device)
         rows = evaluate(model, split_dir, subjects, device, depth, args.batch,
                         bool(data.get("axial_first", False)), tta=args.tta,
-                        multicontrast=multicontrast)
+                        multicontrast=multicontrast,
+                        neighbour_offsets=neighbour_offsets)
         if not rows:
             print("  no transitions scored -- check cache_dir and subject ids", flush=True)
             continue

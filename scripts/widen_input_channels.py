@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Widen a single-channel ConditionalUNet checkpoint to multi-contrast input.
+"""Widen a ConditionalUNet checkpoint's first convolution, zero-initialising the new channels.
 
 The multi-contrast data module feeds (primary, T1W, T2W, T2FLAIR), where channel 0
 duplicates the contrast being predicted -- exactly what the single-channel model was fed.
@@ -26,13 +26,22 @@ FIRST_CONV = "encoders.0.0.weight"
 
 
 def widen(state: dict[str, torch.Tensor], channels: int) -> dict[str, torch.Tensor]:
+    """Widen the first convolution, carrying every existing channel and zeroing the rest.
+
+    Any current width is accepted, not just 1: the 2.5D input (section 34) widens an already
+    4-channel multi-contrast model to 12 by appending the same four contrasts at two
+    neighbouring slices. The invariant is the one that matters -- the existing channels keep
+    their weights at their existing indices, so the widened model computes a bit-identical
+    function and the new channels start contributing nothing.
+    """
     weight = state[FIRST_CONV]
-    if weight.shape[1] == channels:
+    current = weight.shape[1]
+    if current == channels:
         return state
-    if weight.shape[1] != 1:
-        raise ValueError(f"{FIRST_CONV} has {weight.shape[1]} input channels, expected 1")
+    if current > channels:
+        raise ValueError(f"{FIRST_CONV} has {current} input channels, cannot narrow to {channels}")
     widened = torch.zeros(weight.shape[0], channels, *weight.shape[2:], dtype=weight.dtype)
-    widened[:, :1] = weight
+    widened[:, :current] = weight
     out = dict(state)
     out[FIRST_CONV] = widened
     return out
@@ -58,7 +67,9 @@ def main() -> None:
     widened = widen(payload[key], args.channels)
     torch.save({"model": widened}, args.output)
     print(f"{FIRST_CONV}: {tuple(before)} -> {tuple(widened[FIRST_CONV].shape)}")
-    print(f"  channel 0 carries the pretrained weight, channels 1..{args.channels - 1} are zero")
+    kept = before[1]
+    print(f"  channels 0..{kept - 1} carry the pretrained weight, "
+          f"{kept}..{args.channels - 1} are zero")
     print(f"wrote {args.output}")
 
 
