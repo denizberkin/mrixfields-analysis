@@ -7,11 +7,18 @@ Two horizons, because the challenge deadline is under two weeks and the work con
 - **Horizon A — challenge submission.** Rank-sum on the leaderboard. Cheap, high-certainty moves only.
 - **Horizon B — fastMRI + conference.** The parts that generalise and are worth writing up.
 
-Last updated 2026-09-05. Log pulled from the shared sheet at 70 rows.
+Last updated 2026-09-14. Leaderboard pulled from `syn74915588` via `scripts/leaderboard.py`.
 
 ---
 
 ## 0. Where we actually are
+
+**State on 2026-09-14.** Best challenge SSIM **0.913652** (`mc_ssim_slice_avg_tta`: 4-channel
+conditional U-Net, FiLM + residual head, MIM-pretrained, SSIM loss, axial-position token, epochs
+6-8 averaged, 4-flip TTA), rank 9/40 all-time and 7/25 among teams submitting since 08-01. The
+test-phase image `docker.synapse.org/syn76236366/task3:v2` ships that model. Sections 39-42 cover
+everything after section 38. The table below is the 2026-09-05 snapshot the plan was written
+against; `reports/architecture_report.tex` has the current one.
 
 **SSIM is the ranked metric we optimise for.** Task 3, modality-averaged, sorted by SSIM:
 
@@ -53,40 +60,28 @@ The reading that follows: a substantial part of the last six weeks may have been
 We are chasing SSIM differences of ~0.005 with no local held-out signal, on models whose early stopping watches training loss. Four runs under these conditions produce four numbers that cannot be ordered.
 
 - [x] **A0.1 — Done, then deliberately switched off.** The split works (880/440 exact partition), but with only 3 paired subjects it costs 33% of the training data, so all configs now run `holdout_subjects = []` with a fixed epoch budget. Kept behind the flag for the day there is more data. Subjects `0006`, `0007`, `0009` are the three possible folds.
-- [ ] **A0.2 — Report per transition × per modality.** 20 transitions whose Δα differs by an order of magnitude are currently averaged into one number. A model that works at 0.1 T and one that copies at 5 T are indistinguishable today.
-- [ ] **A0.3 — Seed-noise floor.** Run the current best config twice with different seeds. If the spread exceeds the gaps we are trying to resolve, stop comparing and say so. Given that the top four models span 0.005 SSIM, this is not a formality.
+- [x] **A0.2 — Done.** `eval_holdout.py` reports per transition and per modality; §28.4 and §31 are built on it.
+- [x] **A0.3 — Done, §16: the seed floor is ~0.001.** §32 then measured that the local score cannot resolve deltas under ~0.001 at all.
 - [x] **A0.5 — Done on the new arm (§9): SSIM saturates at epoch 8.** `runs/task3_unet_pro/artifacts/` holds epochs 10, 20, 30, 40, 50 and 60. Score all six on the held-out fold, SSIM primary, per transition. This directly tests conclusion 3 in section 0: if SSIM peaks near epoch 10 and decays, then the July result is explained, the August regression is explained, and checkpoint selection is worth more SSIM than any architecture tried since. Hours of compute, and it decides what A1–A5 are even for.
-- [ ] **A0.4 — Early stopping on the held-out fold.** `components/training/task3.py:228` falls back to *training* loss when `validation_loader is None`, which is every 2D config. Once A0.1 lands, set `early_stopping_monitor = "validation"`.
 
 ### A1 — Free wins on the current best model · ~2 days
 
 None of these need a new architecture and all are near-zero risk.
 
 - [x] **A1.1 — Predict the residual, not the image.** **Worth +0.0126 SSIM with A3.1** (see §9). Implemented, zero-init verified (max|out-in| = 0.000e+00 at step 0); training in `task3_unet_film_residual`. Done in the bounded [-1,1] range, not the tubelet's logit space: ~85% of a slice is air at exactly -1, where `atanh` puts the base near -5 and the tanh derivative is ~1e-4 — the saturation `conditional_vit.py` documents as having frozen a run at a constant.
-- [ ] **A1.2 — Eight-way dihedral TTA at inference.** Flips × rot90, average. Not in the log anywhere.
-- [ ] **A1.3 — Checkpoint weight averaging** over the artifacts already sitting in `experiment-pipeline/runs/*/artifacts/`. Costs one evaluation pass.
-- [ ] **A1.4 — Submit the best combination** of A1.1–A1.3.
+- [x] **A1.2 — Done as 4-flip TTA, shipped.** rot90 does not apply to non-square slices. Declined at +0.0008 local (§11), revived after §41; worth +0.0042 on the challenge together with A1.3 (§40).
+- [x] **A1.3 — Done, shipped.** Mean of e6-e8 of `task3_mc_ssim_slice`; declined at +0.0009 local (§15), revived after §41 (§40).
+- [x] **A1.4 — Done: `mc_ssim_slice_avg_tta`, 0.913652** (§40). The test-phase Docker image ships it.
 
 ### A2 — The calibration control · ~0.5 day · one submission slot
 
-- [ ] **A2.1** Fit the per-(modality, source, target) monotone quantile map from Report finding F4 on all three paired subjects and submit it. Zero parameters, no training.
+- [x] **A2.1 — Measured, not submitted** (§14): ~0.849 calibrated, far below the U-Net. Calibration is not what the architectures were resolving.
 
 Why this matters more than it looks: F4 measured that this map removes 46% of the identity's error, and F3 measured that the U-Net's target conditioning is 12–96% explained by a single global affine. If a parameter-free histogram match lands near 0.2329, then every architecture comparison in section 0 has been resolving differences in calibration quality, and we should say so in the report rather than run a fifth architecture.
 
 ### A3 — Conditioning, the one lever with headroom · ~3 days
 
 - [x] **A3.1 — FiLM at every decoder scale.** Run jointly with A1.1; see §9. Implemented alongside A1.1, same run. Per-stage scale-and-shift after each `InstanceNorm`, zero-init. Both flags opt-in; the six `task3_unet_pro` checkpoints still strict-load into a default model. The bottleneck broadcast add is kept, not replaced — dropping it would change what a loaded checkpoint computes.
-- [ ] **A3.2 — Condition on physics, not fifteen opaque indices.** Feed `(modality one-hot, log B₀_src, log B₀_tgt, Δα(src→tgt))` through a small MLP to produce the FiLM parameters, so the twenty transitions share structure instead of each learning its own embedding from three subjects.
-- [ ] **A3.3 — Control: delete the source embedding.** F2 measured that changing the declared source field moves the output by 1.1–2.1% of its range while changing the target moves it by 19.7–53.7%. If removing it costs nothing, the model simplifies; if it costs something, F2 was a one-checkpoint measurement and needs weakening. Either way we learn something.
-
-### A4 — Tasks 1 and 2, where nobody is competing · ~2 days
-
-Tasks 1 and 2 are scored on **five** metrics; Task 3 on three. We have spent almost all recent effort on Task 3.
-
-Finding F1: on Task 1 the identity control has the **highest Dice of any model in the log** (0.8549 against CUT 0.8542 and CycleGAN 0.8498) and its volume consistency is within 0.002 of the best. Two of five ranked metrics are being scored and not competed for.
-
-- [ ] **A4.1** Apply the A2 calibration map to Task 1 / Task 2 inputs and submit. It should keep Dice and volume near identity level while improving nRMSE.
-- [ ] **A4.2** Run `scripts/segment_predictions.py` on the result and confirm Dice/Volume locally before submitting. Note this needs the TensorFlow environment, not `mri`.
 
 ### A5 — Encoder transfer · **promoted to first experiment** · ~3 days
 
@@ -98,7 +93,6 @@ Finding F1: on Task 1 the identity control has the **highest Dice of any model i
 So the architecture we were going to build by hand exists, is trained, and was only ever run for two epochs with no control.
 
 - [x] **A5.1 — Pull the artifact.** `lejepa_pretraining/artifacts/encoder_step_00040000.pt`, 86.66 M params, schema v2, step 40 000 of a planned 90 000. Strict load verified; all four provenance hashes match `run_metadata.json`.
-- [ ] **A5.2 — The matched control.** Same Tubelet-UNETR, same LOSO fold, same 10-epoch budget as the current leader, two arms: LeJEPA init vs. random init. Settles the encoder question and is the paper's central result; Furkan's design record names it as the one omission. **Caveat on priority:** at matched 2 epochs the encoder wins nRMSE (0.2383 vs 0.2436) and LPIPS (0.0889 vs 0.0967) but *loses SSIM* (0.8893 vs 0.8942). Since SSIM is the ranked metric, this is no longer the first experiment — but 0.0049 is inside the unmeasured seed spread, so it is not settled against either.
 - [x] **A5.2/A5.3 — Run and submitted. It lost.** 23 epochs (budget 40), early-stopped on a held-out
   fold, best epoch 15 restored. Challenge: **SSIM 0.8590 / nRMSE 0.2658 / LPIPS 0.1436** against the
   leader's 0.9026 / 0.2329 / 0.0816. nRMSE is competitive; **LPIPS is barely better than identity's
@@ -109,12 +103,11 @@ So the architecture we were going to build by hand exists, is trained, and was o
 
 ## 2. Horizon B — fastMRI and a paper
 
-Ordered by how much of it is already in hand.
+Ordered by how much of it is already in hand. B2-B4 (synthetic pretraining, the SynthSeg generator,
+a contrast-agnostic perceptual loss) were dropped: §31 and §27 showed the 0.1T deficit is
+information-limited, and LPIPS is the metric the ranked line deliberately trades away (§28.1).
 
 - [ ] **B1 — The dense/CLS gap in tubelet LeJEPA.** Section 3. This is a clean, already-measured negative result and the most publishable thing we have.
-- [ ] **B2 — Synthetic pretraining transfer test.** The generator reached 0.86–0.98 diversity ratio at 0.1/3/5 T (1.5 T still short at 0.65) but no model has been pretrained on it, so the premise of the whole exercise is untested. Run the 2×2: {random, pretrained} × {real pairs only, synthetic→real}.
-- [ ] **B3 — Rebuild the generator on SynthSeg's own machinery.** `estimate_priors.build_intensity_stats` gives per-label GMM statistics over ~32 disjoint labels instead of three soft tissues, which removes the over-summing term in the current remap outright. `BrainGenerator` adds bias field, slice-thickness and nonlinear deformation, none of which the four-step operator models.
-- [ ] **B4 — A contrast-agnostic perceptual loss.** The LPIPS term uses AlexNet features trained on natural photographs. SynthSeg's encoder was trained to be invariant to MRI contrast and resolution — exactly the invariance a field-translation perceptual metric needs. Distil it into a small 3D U-Net (its generator supplies unlimited training data) and use its features.
 - [ ] **B5 — Spectral-profile loss.** Penalise `|log P_pred(f) − log P_tgt(f)|` over the 0.02–0.20 fit band instead of hand-set band weights. Gets the sign right by construction at every transition, which fixed band weights cannot (three of nine Δα entries are negative). `scripts/spectral_analysis.py` already has the RAPSD machinery.
 - [ ] **B6 — Port to fastMRI** and expand the study beyond the three travelling-volunteer subjects.
 
@@ -158,25 +151,19 @@ Report II named this exact risk — *"the gap between those two paths is the des
 
 ## 4. Suggested order
 
-| When | What | Why |
-|---|---|---|
-| Days 1–2 | **A0.1, A0.5** | The held-out fold, then the six-checkpoint sweep. No training. Tests whether six weeks of architecture search has been reading checkpoint noise. |
-| Days 2–3 | A0.3, A1.2, A1.3 | Seed floor, dihedral TTA and checkpoint averaging — all three help SSIM specifically, none needs a new architecture. |
-| Days 3–4 | A2 | Zero-parameter calibration control. Its SSIM effect is unmeasured, unlike its nRMSE effect, so treat it as one cheap submission rather than a threat to the leader. |
-| Days 4–7 | A3 | Conditioning is still the only large measured effect on SSIM (0.8699 → 0.8976). |
-| Days 5–9 | A5.2 | The matched encoder control. Demoted from first: on SSIM the encoder is 0.0049 *behind* scratch at matched 2 epochs. Still the paper's core result, so run it, but after the free SSIM has been taken. |
-| Days 6–9 | A4 | Different task, different person, in parallel. |
-| Days 6–9 | A4 | Run in parallel with A3 — different task, different person. Clearest unclaimed rank-sum win. |
-| Days 9–12 | Submissions, freeze, write up | |
-| After | B1 → B2 → B4 | B1 is already measured and only needs the positive control. |
+Superseded. The order actually taken is the log from section 7 on.
 
 ---
 
 ## 5. Open items
 
-- [ ] Drive folder holds `encoder_step_00040000.pt` as the newest export, but the config targets 90 000 steps and `run_metadata.json` records `stop_after_steps: 60000`. Confirm with Furkan whether the run is finished, stalled, or still going.
 - [ ] `scripts/generate_challenge_submission.py` cannot run — its `validate_inputs()` hard-requires an `official/MRIxFields2026/` checkout that is not in this repo. Either vendor the checkout or delete the script in favour of `make_task3_submission.py`.
 - [ ] `mlflow.db` and `mlruns/` sit at the repo root, but `experiment-pipeline/mlruns/` also exists — tracking URIs are cwd-relative, so runs have been launched from both places. Pick one.
+- [ ] **Scrub `table_*.csv` from git history.** Gitignored now, but earlier commits on the public repo still carry other teams' submission rows: `git filter-branch --force --prune-empty --index-filter 'git rm --cached --ignore-unmatch "table_*.csv"' --tag-name-filter cat -- --all`, then `git push --force-with-lease origin main`. Old tip `cb69dd9`.
+- [ ] Run the built image against the testbed (`docker/task3/build.sh test /tmp/tb /tmp/tb_out`, then `check_docker_output.py --ground-truth`); §36.5 rehearsed the entrypoint, not the image. Push `v3` if anything differs.
+- [ ] Finish calibrating the fixed harness (§41) against the leaderboard: `mc_25d` e10, `mc_ssim_slice` e8 and `avg_e6_e8` + TTA still to score locally. Decides whether local can rank checkpoints again.
+- [ ] Share `syn76236366` with `MRIxFields2026 Admin` at Can edit; file <https://v.wjx.cn/vm/rbkXkKY.aspx>. Audit materials due 2026-09-17.
+- [ ] `avg_e4_e8` + TTA is built at `submissions/task3_mc_ssim_slice_avg48_tta/task3.zip`, unsubmitted; 2.5D + averaging + TTA was never tried.
 
 ---
 
@@ -236,15 +223,8 @@ Two periodic artifacts, both structural:
 | Axial slab seams | z-gradient at every 16th slice **2.17x** the surrounding slices | 16-slice slabs predicted independently, never blended |
 
 LPIPS punishes periodic structure hard, which is why it came back at 0.1436 against identity's 0.1573
-while nRMSE stayed a competitive 0.2658. **More epochs cannot fix either.** If the tubelet is revisited,
-the two cheap inference-side tests come first, neither needing retraining:
-
-- [ ] **7.1** Overlapping slab inference with blending, as the swin path already does (`--overlap 0.25`).
-- [ ] **7.2** Shifted-grid TTA — average predictions over in-plane offsets, which cancels a fixed
-  16 px grid by construction.
-
-Only if those close most of the LPIPS gap is a decoder change (resize+conv instead of transposed
-convolution, the standard checkerboard fix) worth the retraining cost.
+while nRMSE stayed a competitive 0.2658. **More epochs cannot fix either.** Not revisited: the track
+was dropped (A5.2/A5.3).
 
 ## 8. The local scorer is calibrated (2026-09-05)
 
@@ -388,9 +368,9 @@ Fixed in `eval_pipeline/cli.py`: `_seed_rngs(config.seed)` seeds `random`, `nump
 exists the weights are already drawn. Verified: seed 1 twice gives an identical
 `encoders.0.0.weight` sum (3.680016), seed 2 gives -3.807679.
 
-- [ ] **A0.3 — the noise floor.** `task3_film_seed1` / `task3_film_seed2`: `task3_unet_film_residual`
+- [x] **A0.3 — the noise floor.** `task3_film_seed1` / `task3_film_seed2`: `task3_unet_film_residual`
   with seed 1 and 2, everything else identical, 10 epochs each, scored on 0009 by the same script.
-  The spread is the number that decides whether any result in this file means anything. Running.
+  Answered in §16: ~0.001.
 
 ### 13.2 Self-supervised pretraining on the unpaired 1056
 
@@ -409,8 +389,8 @@ per domain = 883 volumes, ~15 GB at float16**; the full 1939 would be ~33 GB for
 pretraining stage cannot consume. float16 is free: `ToTensor` ends in `.float()`. Verified the
 retrospective normalisation matches prospective (fg mean 0.2057 vs 0.2006 on T1W 7T).
 
-- [ ] **13.2 — pretrain on 883 unpaired volumes, then fine-tune on the 3 paired subjects.** ~294x the
-  images the supervised stage sees. The only structural lever found that is not architecture.
+- [x] **13.2 — pretrain on 883 unpaired volumes, then fine-tune on the 3 paired subjects.** ~294x the
+  images the supervised stage sees. Done, §18: +0.0021 local, real; scaled up in §21.
 
 ## 14. A2 answered: calibration is not what the architectures were resolving (2026-09-05)
 
@@ -758,10 +738,9 @@ So the two levers behave oppositely: pretraining *scale* is done, fine-tuning *l
 big e25, local **0.95535**. On the pretrained-model offset (0.05161, the only relevant anchor, n=1)
 that predicts **~0.9037** -- the first candidate in this file to project above the 0.9026 bar.
 
-- [ ] **21.4 — `task3_retro_long_ft`.** 50 supervised epochs resuming from
-  `task3_unet_pretrain_30000.pt` via `[model.params].checkpoint`, `pretrain_steps = 0`. Reuses the
-  finished 5h of MIM instead of repeating it, and locates where a pretrained model actually turns
-  over. Queued behind the submission build.
+- [x] **21.4 — `task3_retro_long_ft`.** 50 supervised epochs resuming from
+  `task3_unet_pretrain_30000.pt` via `[model.params].checkpoint`, `pretrain_steps = 0`. Done, §24:
+  turns over at e25, unstable past it.
 
 ## 22. 0.903110 — past the bar (2026-09-07)
 
@@ -863,8 +842,7 @@ New code, all additive:
 
 Existing single-channel checkpoints still load strictly — confirmed.
 
-- [ ] **23.2** Queued behind `task3_retro_long_ft`. Compare against that run's e25 at matched
-  epoch: same seed, same data order, same budget, only the input channels differ.
+- [x] **23.2** Answered in §25: +0.0037 on the challenge (§26).
 
 
 ## 24. A0.5 on `task3_retro_long_ft`: the pretrained fine-tune turns over at e25 too, and past it the model is unstable rather than saturated (2026-09-08)
@@ -972,9 +950,7 @@ Uploaded as `unet_multi_contrast_e20`; scored **0.906773** (section 26). Local *
 of 0.903110. The caveat is that the offset regime was pinned on models that see one channel, and
 this one sees four -- the projection is an extrapolation, and the submission is what tests it.
 
-- [ ] **25.3** If the offset holds, the next question is whether MC and the 40-epoch schedule
-  compose: `widened4_from_e25` fine-tuned to e40 rather than e25. Section 24 says epochs past 25
-  are unstable, so this is not free.
+- [x] **25.3** Answered in §29: it does not compose; e40 vs e20 is +0.00012 on 32/60.
 
 
 ## 26. 0.906773 — the multi-contrast submission scored, and the calibration survived four channels (2026-09-08)
@@ -1072,9 +1048,7 @@ words turns up `ssim` in 10 submissions across **6 teams**, alongside `synth` (2
 `lesssteps_moressim?` -- but it is inside the pre-07-07 window, so it is evidence about what
 people try, not about what it is worth.
 
-- [ ] **27.3** Add a differentiable SSIM (or MS-SSIM) term to the training loss and sweep its
-  weight. Smallest change on the list, aimed straight at the ranked metric, and the one lever
-  where the field's naming says six teams got there first.
+- [x] **27.3** Done, §28: +0.0021 on the challenge at weight 0.5; §28.6 swept 0.10/0.25 and 0.5 wins.
 
 ## 28. 0.908873 — SSIM in the loss is worth +0.0021, and the sampling grid nearly hid it (2026-09-08)
 
@@ -1405,3 +1379,435 @@ residual head could start from a *fitted per-domain affine* rather than from ide
 the spatial remainder instead of re-deriving the gain. Cheap to implement and in the same
 zero-init spirit as everything else on the spine. Not attempted: section 32's floor means the
 gain would have to exceed ~0.001 to be visible, and there is under a day left.
+
+## 36. The test-phase Docker submission (2026-09-10)
+
+Built at `docker/task3/`, shipping `task3_mc_ssim_fine` e8 -- the checkpoint behind
+`unet_multicontrast_ssim_ep8`, our best challenge score at **0.908873**.
+
+**The test phase is not the validation phase, and three things differ.** Pulled from the
+challenge wiki (`syn72060672` page 639760) and
+`MRIxFields2026/Submission/testing-2026/doc/participant_guide.md`:
+
+| | validation phase | test phase |
+|---|---|---|
+| shape | `(364, 436, 30)`, `Z_CLIP_RANGE` slab | `(364, 436, 364)`, "do not submit cropped slabs or validation-style z-clipped volumes" |
+| file list | our own subject table | `/input/manifest.json`, and *only* that -- case ids are hidden |
+| count | 180 | 120 (20 mappings x 2 cases x 3 modalities) |
+| delivery | ZIP to Synapse | Docker image to `docker.synapse.org/syn76236366/task3` |
+
+Deadline **2026-09-10**, form at <https://v.wjx.cn/vm/rbkXkKY.aspx>. Non-final images are
+accepted for technical testing until one passes. Evaluation host: RTX A6000 48 GB, driver
+575, 20 h per task, **no network at runtime**.
+
+### 36.1 The 144 slices we never trained on
+
+`scripts/preprocess.py` extracts slices 72..291 only. The test phase requires all 364, and
+below z=72 there is real anatomy -- up to 21% foreground per slice, brain from z~31. So the
+model is being asked for 144 slices it has never seen.
+
+Measured rather than assumed (`--` full volumes, per-slice SSIM against ground truth, the way
+`eval_holdout.py` scores):
+
+| band | identity | model | delta |
+|---|---|---|---|
+| z 0-71 (never trained) | 0.945-0.992 | 0.980-0.994 | **+0.002 .. +0.039** |
+| z 72-291 (trained) | 0.780-0.909 | 0.949-0.975 | +0.040 .. +0.195 |
+| z 292-363 (never trained, ~all air) | 0.999 | 0.999 | +-0.0002 |
+
+**It generalises.** Every case beats identity outside the training band, so no band is
+special-cased and every slice goes through the model. Rejected the alternative -- copying the
+source outside z 72..291 -- because it would have cost the +0.002..+0.039 measured above.
+
+### 36.2 Full-volume scores are not slab scores
+
+On `T1W 0.1T->1.5T 0006`: full volume 0.9715, slab 150:180 0.9485; identity 0.9417 vs 0.8796.
+The ~150 air-only slices are trivially correct, so **every full-volume number sits higher than
+the slab number we have been tracking all along.** The section 22.1 calibration (subtract
+~0.048 from local SSIM) is a slab calibration and does **not** transfer to these.
+
+### 36.3 What is checked, and how
+
+- `scripts/verify_docker_model.py` -- the vendored `docker/task3/mrx/model.py` and the
+  pipeline's `conditional_unet.py` produce **max |difference| = 0.000e+00** from the shipped
+  weights, and the 74 shipped tensors are bit-identical to `task3_unet_finetune_8.pt`. A copy
+  that drifted would be invisible otherwise: both define a `ConditionalUNet` that loads the
+  same state dict without complaint.
+- `scripts/make_docker_testbed.py` -- rebuilds the published `/input` layout from training
+  subjects, which are the only ones with ground truth at every field, so the container's own
+  output can be *scored* and not merely counted.
+- `scripts/check_docker_output.py` -- all six published rejection criteria (missing, extra,
+  unreadable, wrong shape, non-finite, out of range), plus SSIM.
+
+**A scoring trap, recorded.** The checker first compared the raw prediction array against a
+canonically-reoriented ground truth and read 0.8459 -- barely above identity. The container
+writes in the file's own `('L','A','S')` orientation, as the validation packer does;
+canonicalising only one side mirrors it and cost **0.11 SSIM**. Compare both sides as stored.
+
+### 36.4 Design decisions
+
+- **Base image `pytorch/pytorch:2.13.0-cuda12.6-cudnn9-runtime`**, matching the training env
+  exactly so the container reproduces local numbers rather than approximating them. The host's
+  driver 575 is CUDA 12.9-capable, so cu126 is in range despite the organizers quoting 12.4;
+  `2.6.0-cuda12.4-cudnn9-runtime` is the drop-in fallback if they ever refuse it.
+- **A sample that raises falls back to copying the source.** A missing file rejects the whole
+  run; identity already scores 0.836. A gap is strictly worse than a degraded prediction.
+- **A contrast absent from the input tree falls back to the primary**, which is what channel 0
+  already holds -- not to zeros, which are a legitimate intensity the model reads as air. Same
+  reasoning as the 2.5D neighbour fallback in section 34.
+- Grouped by `(case_id, source_field)` so each source volume is read once rather than once per
+  mapping.
+
+Runtime **~7 s per volume** on a GV100 shared with a training job: ~15 min for all 120, against
+a 20 h budget.
+
+### 36.5 Dress rehearsal: all 120, end to end
+
+`make_docker_testbed.py` builds the published `/input` layout from subjects 0006 and 0009
+(20 mappings x 3 modalities x 2 cases = 120, the exact test-phase workload), the entrypoint
+runs it, and `check_docker_output.py` checks every published rejection criterion and scores:
+
+    manifest samples : 120
+    files found      : 120
+      SSIM T1W      0.9770  (n=40)
+      SSIM T2FLAIR  0.9734  (n=40)
+      SSIM T2W      0.9756  (n=40)
+      SSIM all      0.9753  (n=120)
+    OK: every manifest sample present, correct shape, finite, within [0, 1].
+
+835 s for 120 volumes, 0 fallbacks. **0.9753 is not comparable to the 0.9606 we track**: these
+are training subjects (optimistic) and full volumes (see 36.2). It is a plumbing check, not a
+score.
+
+Still to do, and all of it outside this repo: build the image (the daemon needs root here),
+push to `docker.synapse.org/syn76236366/task3`, share `syn76236366` with `MRIxFields2026 Admin`
+at Can edit, and file <https://v.wjx.cn/vm/rbkXkKY.aspx>.
+
+## 37. 0.909353 — the 2.5D input is the new best, and it is a clean attribution (2026-09-10)
+
+`task3_mc_25d` e10 submitted as `mc_25d_e10`: **challenge SSIM 0.909353**, up **+0.000480**
+from 0.908873. nRMSE 0.243669 (+0.0019, worse), LPIPS 0.086309 (**-0.0024**, better).
+
+| | SSIM | nRMSE | LPIPS |
+|---|---|---|---|
+| mc_ssim_fine e8 | 0.908873 | 0.241785 | 0.088697 |
+| **mc_25d e10** | **0.909353** | 0.243669 | 0.086309 |
+
+**The attribution is exact.** The run resumed from `widened12_from_e8.pt`, verified as e8's
+74 tensors unchanged with the first conv widened 4 -> 12 and channels 4..11 zeroed, so step 0
+computed e8's function bit-for-bit. The only difference is the two neighbour slices at
+(-2, +2). Nothing else moved: same losses, same weights, same seed, same schedule shape.
+
+**It buys the opposite trade from the SSIM loss.** Section 28.1 spent LPIPS to buy SSIM;
+2.5D buys both and gives back a little nRMSE. Consistent with the mechanism -- neighbouring
+slices supply structure the single slice cannot, which helps perceptual similarity, while the
+extra context slightly blurs absolute intensity.
+
+**Caveat on the epoch.** e10 was the endpoint, not a measured optimum: the checkpoint sweep
+was killed for cost (~3.7 h for ten checkpoints at 12 channels) before any local score
+existed. Section 28.6 measured +-0.003 oscillation between adjacent epochs under the SSIM
+term, so a better epoch than e10 plausibly exists among e1..e9, all of which are on disk.
+`--batch 16` cuts the sweep to ~22 min per checkpoint if it is ever worth revisiting.
+
+### 37.1 The plain-model submission broke the local calibration, and section 22.1's rule caught it
+
+`task3_plain_e15` (no FiLM, no residual head, 12k pretrain) scored **0.901476**, against a
+*local* score of 0.9112 at e10 -- an implied offset of ~0.010, where the two pinned regimes
+are 0.05192 (pretrained) and 0.06050 (not pretrained). A third regime, and far tighter.
+
+Against `retro_pretrain_big` (FiLM+residual, 30k pretrain): local gap **-0.0427**, challenge
+gap **-0.0016**. Local scoring runs on the three *training* subjects, so 25 epochs of
+FiLM+residual fits them far better while generalising barely better at all.
+
+**I read the -0.0427 as decisive evidence against section 17 and was wrong**; section 22.1
+already said "local score ranks models within a regime, never across", and this was across.
+The leaderboard agrees with section 22.2 instead: "no architecture change contributed after
+the plain conditional U-Net". FiLM+residual is worth **+0.0016** on unseen subjects.
+
+**Cheapest untested lead in this file:** a plain-architecture model reached 0.901476 with 12k
+pretraining and 15 epochs, no multi-contrast and no SSIM loss. Those two were worth +0.0058
+on the FiLM line. If they carry over, the plain family lands near 0.907 for a fraction of the
+compute.
+
+### 37.2 `scripts/leaderboard.py` ranks by any metric, and names teams
+
+`--metric {ssim,nrmse,lpips}`, default SSIM. `HIGHER_IS_BETTER` drives both the per-team pick
+and the sort direction, so nRMSE and LPIPS sort ascending and a team's row becomes their
+lowest value -- ranking them like SSIM would invert the table. The per-team pick really does
+change: Newton123 leads SSIM with `p_g_5` (0.931402) but nRMSE with `p_ng_1` (0.103256), and
+we are 11th on SSIM but 13th on nRMSE.
+
+Team names come from Synapse -- `/team/{id}`, falling back to `/userProfile/{id}` because a
+submitterid is a *user* id for an individual entrant (3584730, the `rician-tool` submitter of
+section 27, is a person). Cached in `.leaderboard_teams.json`, gitignored, so `--csv` stays
+offline.
+
+## 38. Conditional flow matching, after the rank-1 team's paper (2026-09-10)
+
+Imre et al., *Conditional Flow Matching for Cross-Field MRI Harmonisation*
+(arXiv:2609.00960, 1 Sep 2026), Leiden UMC. Task 3, same as us.
+
+### 38.1 The paper is the rank-1 team, and its numbers are not their rank-1 numbers
+
+Every row of their Table 1 is a leaderboard submission by **submitterid 3542722
+("Newton123")**, submitted 08-19/08-20 to obtain the ablation:
+
+| Table 1 row | SSIM/LPIPS/nRMSE | submission | SSIM/nRMSE/LPIPS |
+|---|---|---|---|
+| Identity | 0.836 / 0.157 / 0.522 | `i` | 0.836497 / 0.521604 / 0.157279 |
+| Regression (same U-Net) | 0.906 / 0.110 / 0.246 | `r` | 0.906488 / 0.246140 / 0.110218 |
+| Diffusion, 50 DDIM | 0.896 / 0.121 / 0.249 | `d` | 0.895771 / 0.248596 / 0.121025 |
+| pretrained only, 5 Heun | 0.837 / 0.147 / 0.468 | `f_pre_5_n` | 0.836654 / 0.468326 / 0.147385 |
+| + finetuning, 5 Heun | 0.885 / 0.103 / 0.268 | `f_fine_5_n` | 0.885169 / 0.268143 / 0.102669 |
+| + adv, 1 Heun | 0.817 / 0.171 / 0.382 | `f_1_n` | 0.817123 / 0.381952 / 0.170902 |
+| **+ adv, 5 Heun** | **0.909 / 0.089 / 0.227** | `f_5_n` | 0.908979 / 0.227387 / 0.089433 |
+| + adv, 10 Heun | 0.909 / 0.089 / 0.229 | `f_10_n` | 0.908921 / 0.229491 / 0.089479 |
+
+**Their published best is 0.909. Ours is 0.909353.** We lead on LPIPS (0.0863 vs 0.0894)
+and trail on nRMSE (0.2437 vs 0.2274). We are also above their regression baseline
+(0.906488), which is the closest thing in the paper to our architecture.
+
+**Their rank-1 0.931402 is absent from their own paper.** Their 06-23 -> 07-07 submissions
+(`new_no_leak`, `t3_h5_g1`, `p_g_5`, `p_ng_1`) run at nRMSE **0.103-0.127** where the entire
+rest of the leaderboard sits at 0.22+; from 07-12 onward, including every number in the
+paper, they are at 0.227-0.246. Section 27.1 called the all-time top three not a target;
+this is that conclusion confirmed by the team's own publication.
+
+### 38.2 What a Heun step is
+
+Second-order predictor-corrector: Euler, then average the velocity at both ends.
+
+    predictor  x~(t+h) = x(t) + h v(x(t), t)
+    corrector  x(t+h)  = x(t) + (h/2) [ v(x(t), t) + v(x~(t+h), t+h) ]
+
+Two network calls per step, so 5 steps is ten forward passes per slice. Their ablation:
+**1 step 0.817, 5 steps 0.909, 10 steps 0.909**. The single-step collapse is the tell --
+adversarial refinement backpropagates through a multi-step Euler rollout, so the field is
+calibrated for multi-step integration and no longer works in one shot.
+
+### 38.3 What they do
+
+Not diffusion from noise: CFM bridging **source to target directly**, since the volumes are
+registered. `x_t = (1-t)x0 + t x1`, and because the path is linear the regression target is
+the constant `x1 - x0`. The network sees only `x_t`, never `x0` separately -- given both it
+could recover `x1` by linear algebra and the objective would collapse to regression.
+
+Three stages, 6.3M params: degradation-bridge pretraining on the unpaired cohort (200k
+steps) **0.837**; cross-field finetuning (100k) **0.885**; adversarial refinement (50k,
+multi-scale PatchGAN, hinge + feature matching, velocity-regression anchor) **0.909**.
+Conditioning `c = emb_t(t) + emb_s(s) + emb_tau(tau)` through **zero-init FiLM** -- the same
+discipline as A3.1 -- and the three contrasts stacked as channels.
+
+**The lever is the GAN stage: +0.024 SSIM, by far their largest single gain.** Their
+pretraining is worth ~nothing over identity, and their finetuned model at 0.885 is *below*
+our 0.909353 -- on the recipe up to that point we are ahead.
+
+### 38.4 Implemented
+
+- `components/models/conditional_flow_unet.py` -- velocity net. Same `_ConvBlock`/`_FiLM`
+  trunk as ConditionalUNet, imported not copied, so a difference is the objective and not
+  the architecture. Sinusoidal timestep embedding summed with the two field embeddings.
+  Zero-init velocity head: at step 0 the predicted velocity is exactly 0, the ODE does not
+  move, and the sampler returns the identity (0.836) -- the same start-from-a-known-score
+  rule as the residual head. `heun_sample` lives beside the model so validation and
+  submission integrate identically (section 20.1 cost 0.006 to a drifted scoring path).
+- `components/losses/flow_matching.py` -- `task3_cfm` (velocity MSE) and a masked variant
+  for the degradation bridge's missing contrasts.
+- `mrixfields/data/cached_dataset.py::CachedFlowDataset` -- both endpoints, three contrasts.
+- `components/data/task3_flow.py` -- 20 directed pairs, **field** domains (5, not 15: with
+  every contrast predicted at once there is no modality left to condition on). Joint
+  augmentation only.
+- `components/training/task3_flow.py` -- CFM trainer, AdamW, EMA 0.999, per-epoch Heun
+  sampling check, audit logging for rules 3/4/5.
+- `configs/task3_cfm.toml`, and `notebooks/task3_cfm_colab.ipynb` for Colab.
+
+Smoke run (1 epoch, 2 field pairs, 1320 slices): velocity MSE **0.014630**, Heun x5 sample
+L1 **0.054932**, EMA tracking. Not yet trained for real.
+
+**Not implemented:** stage 1 (degradation bridge) and stage 3 (adversarial refinement).
+Stage 3 is the +0.024.
+
+### 38.5 Augmentation
+
+Premise correction: we *do* augment -- `horizontal_flip = 0.5` in every config, applied to
+both endpoints. What is untried is anything beyond it.
+
+The constraint is that the pair is registered, so an augmentation must hit source and target
+identically or it destroys the supervision. **Geometric (joint) is the one worth trying**:
+sections 17/24 measured the score degrading past e20-25 while training loss falls, which is
+overfitting to three subjects, and augmentation is the standard answer. `max_rotation` is
+wired and defaults to 0. **Intensity augmentation is the trap** -- the task *is* the
+intensity mapping (section 35: 55-88% of each transition is a per-domain affine), so
+perturbing it teaches the model to ignore the signal, and perturbing both endpoints moves
+absolute intensity, which nRMSE punishes. It belongs only in the degradation bridge, where
+the endpoints differ by construction. And nothing augments past section 14.1's 0.011
+between-subject spread with three subjects; only the unpaired cohort does.
+
+### 38.6 Their `p_*`/`pp_*` submissions are a 2x2 run twice, and the GAN reverses the step preference
+
+Decoding the names: `g`/`ng` = GAN / no GAN, `1`/`5` = Heun steps, `p` (07-07) and `pp`
+(07-23) the same four configurations either side of the nRMSE shift.
+
+| config | p_* (07-07) | pp_* (07-23) | delta |
+|---|---|---|---|
+| GAN, 5 steps | **0.931402** | **0.904152** | -0.0273 |
+| no GAN, 1 step | 0.928108 | 0.894204 | -0.0339 |
+| no GAN, 5 steps | 0.914424 | 0.884591 | -0.0298 |
+| GAN, 1 step | 0.892674 | 0.872922 | -0.0198 |
+
+**The rank order is identical in both eras** (`g_5 > ng_1 > ng_5 > g_1`) while the absolute
+level drops uniformly and nRMSE roughly doubles (0.118->0.243, 0.103->0.258, 0.114->0.269,
+0.176->0.294). Ordering preserved under a uniform shift is a scoring change, not a
+modelling one -- and it means their ablation's *conclusions* are usable even though its
+July numbers are not.
+
+**The GAN reverses which step count wins.** Without it, 1 step beats 5 (0.928 vs 0.914;
+0.894 vs 0.885). With it, 5 beat 1 (0.931 vs 0.893; 0.904 vs 0.873), and `g_1` is the worst
+of the four -- worse than no GAN at all. Mechanically: an un-refined field is a conditional
+mean, so one step from x0 applies the average velocity and lands on the regression answer,
+while extra steps re-evaluate it at intermediate x_t and compound error; the refined field
+is trained *through* a rollout and is only correct as a trajectory. Their paper reports the
+one-step collapse (0.817) but not the inversion. A submission named `lesssteps_moressim?`
+(06-25, 0.928103) is a duplicate of `p_ng_1` -- them finding it live.
+
+**Consequence for section 38.4: stage 3 is not optional.** The post-correction no-GAN
+configuration is `pp_ng_1` at 0.894204 and their published no-GAN stage is 0.885, both
+**below our 0.909353**. CFM without adversarial refinement would very likely lose ground.
+The GAN is worth +0.010 (pp era) to +0.024 (paper) and is the only part of their pipeline
+that clears us. Also: evaluate any pre-GAN checkpoint at `heun_steps = 1`, not the config's
+5, or the number will understate it.
+
+### 38.7 Stage 3 implemented, in the pipeline and the notebook
+
+- `components/models/patchgan.py` -- conditional multi-scale PatchGAN (5.54M params, 2
+  scales, patch grids 44x54 and 21x26), hinge losses, feature matching. Patch not global
+  because refinement restores *texture* and a global critic scores anatomy, which is already
+  right. Conditional on x0 and both fields, so it judges "a plausible 3T image of this
+  subject from this 0.1T scan" -- an unconditional critic is satisfied by any sharp brain,
+  which is the hallucination failure mode.
+- `components/training/task3_flow_adv.py` -- differentiable Euler rollout, hinge + feature
+  matching + velocity anchor, 5000-step critic warm-up, adversarial weight ramped over 2000
+  generator steps. Their values throughout: anchor 1, adversarial 1e-4, feature matching 10,
+  G lr 1e-5, D lr 3e-4.
+- `configs/task3_cfm_adv.toml` -- batch 4, not stage 2's 16: the rollout keeps 5 generator
+  passes in the graph, so activation memory is ~5x a plain step.
+- Notebook extended to 28 cells with the same stage, and `ADV_BATCH_SIZE = BATCH_SIZE //
+  ROLLOUT_STEPS` since the probe measures a single pass.
+
+Smoke run (1 epoch, 2 pairs, warm-started from the stage-2 smoke checkpoint):
+`d=1.1554 adv=0.9105 fm=0.1421 velocity=0.013254`. The critic hinge is off its 2.0
+initialisation and **the velocity anchor is below stage 2's 0.014630**, i.e. refinement is
+sharpening without drifting off the translation, which is exactly what the anchor is for.
+
+`configs/task3_cfm.toml` now samples at `heun_steps = 1`, per 38.6: that config trains the
+pre-GAN model, and scoring it at 5 would understate it.
+
+### 38.8 Conditioning carries modality as well as field
+
+Their eq. 3 is `c = emb_t(t) + emb_s(s) + emb_tau(tau)` with s, tau the **field strengths**
+only -- 5 domains. Ours now defaults to the joint (modality, field) index, 15 domains, as
+`[B, 3]` -- one per contrast channel, in MODALITIES order -- summed inside the model.
+
+**Is modality conditioning redundant?** Partly, and it is worth being clear why. They stack
+all three contrasts and predict a three-channel velocity in one pass, always: their
+Algorithm 2 has no mask, and the per-channel mask appears only in Algorithm 1 because the
+retrospective cohort is missing contrasts. So the channel index already identifies the
+modality, and the network can in principle learn per-contrast behaviour in the convolutions.
+
+What 5 domains cannot do is give the *conditioning vector* per-contrast content: all three
+contrasts at a field share one embedding row, so any per-(modality, field) structure has to
+be re-derived by the trunk. Section 35 measured that structure directly -- the 0.1T->1.5T
+affine gain is 0.649 for T1W, 0.693 for T2W, 0.819 for T2FLAIR -- so it is real, not
+hypothetical. Cost of the 15-row tables is ~10k parameters on 9.3M, i.e. 0.1%.
+
+Left as a switch rather than an argument: `domain_mode = "joint"` (default) or `"field"`
+(the paper's), in the data module and in the notebook, so it is a one-line A/B.
+
+Threaded through the model (`_embed` sums one or several indices per sample), the
+discriminator (same helper, so critic and generator are conditioned identically), both
+configs (`num_domains = 15`), and the notebook. Domains are emitted as tensors, not lists:
+default collate turns a list of ints into a list of B-length tensors rather than `[B, 3]`,
+and the trainer is then handed something with no `.to()`.
+
+Both stages re-smoked under joint conditioning:
+
+    stage 2  velocity_mse 0.014807, Heun x1 sample L1 0.064824 (identity 0.094030)
+    stage 3  d 0.9756, adv 1.1695, fm 0.1516, velocity 0.013333
+
+Stage 2 already beats identity after one epoch on two field pairs, and stage 3's anchor sits
+below stage 2's, so refinement sharpens without drifting off the translation.
+
+## 39. Axial-position conditioning: +0.0006 on the 2D line, -0.0010 on the 2.5D one (2026-09-11)
+
+Sinusoidal embedding of the normalised slice index (over `SLICE_INDEX_RANGE = (72, 291)`) added to
+the bottleneck conditioning vector and read by every decoder FiLM; zero-init projection, so step 0
+is the seed exactly (verified `max |plain - sliced| = 0.000e+00`). Two 8-epoch runs:
+
+| run | seed | submission | SSIM | vs parent |
+|---|---|---|---|---|
+| `task3_mc_25d_slice` | `mc_25d` e10 | `mc_25d_slice_ep8` | 0.908354 | -0.000999 |
+| `task3_mc_ssim_slice` | `widened4_from_e25` (same as `mc_ssim_fine`) | `mc_ssim_slice_e8` | **0.909433** | +0.000560 |
+
+Both inside the +/-0.001 band. 2.5D (+0.0005) and the token (+0.0006) are worth the same and do
+not add: whatever the second supplies, the first already used. Kept because it is the run §40
+averaged. `slice_conditioning = false` by default; every earlier config is unchanged.
+
+## 40. 0.913652 -- checkpoint averaging + 4-flip TTA, the largest step since conditioning (2026-09-11)
+
+`mc_ssim_slice_avg_tta`: mean of the e6/e7/e8 weights of `task3_mc_ssim_slice`
+(`scripts/make_soup.py`), four in-plane flips averaged at inference
+(`make_task3_submission.py --tta`). **+0.004219** over e8.
+
+| | e8 | avg + TTA |
+|---|---|---|
+| SSIM | 0.909433 | **0.913652** |
+| T1W / T2W / T2FLAIR | 0.911214 / 0.915629 / 0.901455 | 0.913460 / 0.919841 / 0.907654 |
+| nRMSE | 0.240994 | 0.237970 |
+| LPIPS | 0.088294 | 0.090899 |
+
+Both halves are averages and averaging smooths: SSIM and nRMSE reward it, LPIPS punishes it, and
+only SSIM is ranked. §11 and §15 had declined the two at +0.0008 / +0.0009 local; §41 is why local
+under-read them. Weight trajectory of the run is a plateau random walk (`||w_e - w_8|| / ||w_8||`
+falls 0.274 -> 0.056 evenly from e1 to e7 while the loss falls monotonically), so a wider window is
+justified: `avg_e4_e8` + TTA is built, unsubmitted.
+
+- **50/50 soup** of that average with `mc_ssim_fine` e8 (`soup_5050_tta`): **0.913203**,
+  -0.000449. Same seed, one config line apart: nothing to decorrelate, and the single checkpoint
+  diluted a three-checkpoint average.
+- **CFM (§38), all three stages**, run on Colab (stage 1: 25k steps on 232,320 retrospective
+  slices, A100, 2.7 h; stage 2: 4,120 optimizer steps; stage 3: 11,000 adversarial steps, batch 64).
+  Stage-3 EMA submitted as `cfm_adv10_tta` (5 Heun steps, 4-flip TTA): **0.886725**, nRMSE
+  0.294564, LPIPS 0.111045. Worse than the 2D line on every metric, 0.027 short; above identity.
+  Closed. Notebook and package models are the same function up to FiLM module names
+  (`films.N.project.*` vs `film_projections.N.projection.*`); the remap is verified to 1e-6.
+
+## 41. The local harness scored the wrong plane until 2026-09-11
+
+`eval_holdout.py::predict` unpacked the cached volume as `(D, H, W)` and walked axis 0, so every
+2D model was fed *sagittal* (436, 364) planes; `preprocess.py:154` and `make_task3_submission.py`
+cut axial (364, 436) ones. Both axes are 364 long and the network is fully convolutional, so
+nothing errored, and `score()` walked axis 0 too. Root cause: the transpose existed as an opt-in
+`axial_first` config flag that only the two tubelet configs set. A second drift found at the same
+time: both eval scripts padded (364, 436) -> (368, 448) bottom-right with `F.pad`, while training
+and the submission centre it with `CenterCropOrPad`, and InstanceNorm spreads the offset over the
+whole plane.
+
+Fixed: `cached_volume` transposes unconditionally (flag deleted), padding centred in
+`eval_holdout.predict` and `eval_flow.integrate`, and `--slab` scores the 30-slice `Z_CLIP_RANGE`
+with the submission's background zeroing. Harness vs submission path on one slab: max 3.1e-4,
+mean 2.3e-6 (was mean 1.2e-2). **Every local number recorded before this date is void.** The
+challenge scores are not. It explains §32's e12 miss, the declined TTA/averaging, and the
+`mc_ssim_fine` > `mc_ssim_slice` local order that the leaderboard reversed. The corrupt-GT finding
+(T2W -> 1.5T on two subjects) stands: it is a statistic of the ground truth. Calibration of the
+fixed harness against the leaderboard is 1/4 done: `mc_ssim_fine` e8 scores local slab SSIM
+0.9536 / nRMSE 0.0749 / LPIPS 0.0622 on three subjects against challenge 0.908873.
+
+## 42. Test-phase image v2 (2026-09-11)
+
+`docker/task3/` (untracked, gitignored) ships `avg_e6_e8.pt` (37 MB, 78 tensors bit-identical to
+the pipeline checkpoint) with slice conditioning and 4-flip TTA in `inference.py`;
+`verify_docker_model.py` reports 0.000e+00 at module level and 1.8e-4 at the entrypoint. Built and
+pushed as `docker.synapse.org/syn76236366/task3:v2` and `:latest`, submitted with tag `v2`. The
+v1 warning "NO docker image tag provided" was `synapseclient.Synapse.submit` defaulting
+`dockerTag='latest'` while only `:v1` had been pushed. The entrypoint was rehearsed on all 120
+testbed samples (§36.5); the built image itself has not been run against the testbed.

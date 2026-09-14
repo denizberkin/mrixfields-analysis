@@ -93,3 +93,7 @@ submissions/
 table_*.csv
 audit-logs/
 .leaderboard_teams.json
+
+# Test-phase container (weights + Synapse project id) and Colab notebooks: kept local.
+docker/
+notebooks/
