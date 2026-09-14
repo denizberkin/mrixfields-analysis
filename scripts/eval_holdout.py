@@ -37,6 +37,9 @@ if str(PIPELINE_ROOT) not in sys.path:
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from mrixfields.data.cached_dataset import SLICE_INDEX_RANGE  # noqa: E402
+from mrixfields.zclip_constants import Z_CLIP_RANGE  # noqa: E402
+
 MODALITIES = ("T1W", "T2W", "T2FLAIR")
 FIELDS = ("0.1T", "1.5T", "3T", "5T", "7T")
 SPLIT_DIRS = {"pro_train": "training_prospective", "pro_val": "Validating_prospective"}
@@ -104,11 +107,30 @@ def resolve_split_dir(cache_dir: Path, split: str) -> Path:
 
 
 def cached_volume(split_dir: Path, modality: str, field: str, subject: str):
+    """Load a cached volume and return it as (Z, H, W) -- axial slice first.
+
+    The .npy on disk is in the NIfTI's own (X, Y, Z) order, so its axial slice is
+    ``volume[:, :, z]``: that is the cut scripts/preprocess.py:154 wrote every training
+    file from, and the cut scripts/make_task3_submission.py predicts. Everything
+    downstream here -- predict() taking axis 0 as depth, score() averaging SSIM over
+    axis 0, the slice-position index -- walks axis 0, so without this transpose the
+    model is run and scored on *sagittal* (436, 364) planes it was never trained on.
+    Nothing errors when that happens: both axes are 364 long and the network is fully
+    convolutional. Measured on mc_ssim_slice e8 / subject 0006, the wrong plane costs
+    2.1x to 5.1x on nRMSE, which is why local rankings kept disagreeing with the
+    leaderboard.
+
+    Transposing once here rather than at each call site keeps predict() and score() on
+    the same axis by construction -- they cannot drift apart again.
+    """
     directory = split_dir / modality / field
     if not directory.is_dir():
         return None
     matches = sorted(p for p in directory.glob("*.npy") if subject in p.name)
-    return np.load(matches[0], mmap_mode="r") if matches else None
+    if not matches:
+        return None
+    # mmap is kept: transpose is a view, so this still does not read the volume.
+    return np.load(matches[0], mmap_mode="r").transpose(2, 0, 1)
 
 
 def to_multiple(value: int, base: int) -> int:
@@ -140,12 +162,31 @@ def predict(model, source: np.ndarray, src_domain: int, tgt_domain: int,
         if pad_d:
             block = np.concatenate([block, np.zeros((C, pad_d, H, W), np.float32)], axis=1)
         tensor = torch.from_numpy(block).to(device)
-        tensor = torch.nn.functional.pad(tensor, (0, pad_w, 0, pad_h))
+        # Centred, not bottom-right. The data modules crop every training slice with
+        # CenterCropOrPad((368, 448)) and make_task3_submission.py does the same, so an
+        # asymmetric pad puts the head at an offset the model has never seen -- and
+        # InstanceNorm normalises over the whole plane, so the shift is not confined to
+        # the border. Worth ~2e-3 mean intensity against the submission path.
+        top, left = pad_h // 2, pad_w // 2
+        tensor = torch.nn.functional.pad(tensor, (left, pad_w - left, top, pad_h - top))
         n = tensor.shape[1] // chunk
         # (C, T, H, W) -> (n, C, chunk, H, W) volumetric, or (T, C, H, W) slice-wise.
         tensor = (tensor.view(C, n, chunk, *tensor.shape[-2:]).permute(1, 0, 2, 3, 4)
                   if depth else tensor.permute(1, 0, 2, 3))
         tensor = tensor.mul(2).sub(1)
+        # 39: axial position of each slice. The volumes are transposed to (Z, H, W) before
+        # they get here, so the index along D is the true z index -- the same quantity the
+        # training files carry as their _s<idx> suffix. Only for the 2D path: a slice-
+        # conditioned model is slice-wise by construction, and a volumetric chunk has no
+        # single position.
+        positions = None
+        if depth == 0 and getattr(model, "slice_embedding", None) is not None:
+            low, high = SLICE_INDEX_RANGE
+            positions = torch.tensor(
+                [min(max((start + offset - low) / (high - low), 0.0), 1.0)
+                 for offset in range(n)],
+                device=device, dtype=torch.float32,
+            )
         with torch.amp.autocast(device.type):
             if tta:
                 # Average over the in-plane flips only -- NOT the eight-way dihedral the
@@ -157,20 +198,35 @@ def predict(model, source: np.ndarray, src_domain: int, tgt_domain: int,
                 accumulated = None
                 for dims in ((), (-1,), (-2,), (-2, -1)):
                     view = torch.flip(tensor, dims) if dims else tensor
-                    result = model(view, td.expand(n), sd.expand(n))
+                    result = model(view, td.expand(n), sd.expand(n), positions)
                     result = torch.flip(result, dims) if dims else result
                     accumulated = result if accumulated is None else accumulated + result
                 pred = accumulated / 4
             else:
-                pred = model(tensor, td.expand(n), sd.expand(n))
+                pred = model(tensor, td.expand(n), sd.expand(n), positions)
         pred = pred.float().add(1).div(2).clamp(0, 1)
         pred = pred.reshape(-1, tensor.shape[-2], tensor.shape[-1])[: stop - start]
-        out[start:stop] = pred[:, :H, :W].cpu().numpy()
+        out[start:stop] = pred[:, top:top + H, left:left + W].cpu().numpy()
     return out
 
 
-def score(pred: np.ndarray, target: np.ndarray, lpips_fn, device) -> dict[str, float]:
+def score(pred: np.ndarray, target: np.ndarray, lpips_fn, device,
+          slab_source: np.ndarray | None = None) -> dict[str, float]:
+    """Score one transition. Arrays are (Z, H, W) -- axial first, see cached_volume.
+
+    ``slab_source`` switches on *challenge* scoring rather than whole-volume scoring: the
+    arrays are cut to Z_CLIP_RANGE, which is the only part a submission actually contains
+    (30 of 364 slices), and the prediction gets the same background zeroing
+    make_task3_submission.py applies before writing a file -- source <= 1e-3 goes to zero.
+    Pass the source volume to get a number comparable with the leaderboard; leave it None
+    to rank checkpoints over the whole head.
+    """
     from skimage.metrics import structural_similarity
+
+    if slab_source is not None:
+        start, stop = Z_CLIP_RANGE
+        pred = pred[start:stop] * (slab_source[start:stop] > 1e-3)
+        target = target[start:stop]
 
     mask = target > 1e-6
     if not mask.any():
@@ -191,9 +247,9 @@ def score(pred: np.ndarray, target: np.ndarray, lpips_fn, device) -> dict[str, f
 
 
 def evaluate(model, split_dir: Path, subjects: list[str], device: torch.device,
-             depth: int, batch: int, axial_first: bool = False,
+             depth: int, batch: int,
              tta: bool = False, multicontrast: bool = False,
-             neighbour_offsets: tuple[int, ...] = ()) -> list[dict]:
+             neighbour_offsets: tuple[int, ...] = (), slab: bool = False) -> list[dict]:
     """Score one model over every field transition of every modality.
 
     With ``multicontrast`` the input is the 4-channel (primary, T1W, T2W, T2FLAIR) stack
@@ -212,12 +268,6 @@ def evaluate(model, split_dir: Path, subjects: list[str], device: torch.device,
     for subject in subjects:
         cache = {m: {f: cached_volume(split_dir, m, f, subject) for f in FIELDS}
                  for m in MODALITIES}
-        if axial_first:
-            # Match the training layout: (x, y, z) -> (z, x, y), so slabs are cut
-            # along the axial axis and SSIM is averaged over axial slices.
-            cache = {m: {f: (None if v is None else v.transpose(2, 0, 1))
-                         for f, v in per_field.items()}
-                     for m, per_field in cache.items()}
         for modality in MODALITIES:
             volumes = cache[modality]
             for src in FIELDS:
@@ -249,7 +299,9 @@ def evaluate(model, split_dir: Path, subjects: list[str], device: torch.device,
                         pred = predict(model, source, joint_domain(modality, src),
                                        joint_domain(modality, tgt), device, depth, batch,
                                        tta=tta)
-                    metrics = score(pred, np.asarray(volumes[tgt], np.float32), lpips_fn, device)
+                    metrics = score(
+                        pred, np.asarray(volumes[tgt], np.float32), lpips_fn, device,
+                        slab_source=np.asarray(volumes[src], np.float32) if slab else None)
                     if metrics:
                         rows.append({"subject": subject, "modality": modality,
                                      "source": src, "target": tgt, **metrics})
@@ -278,9 +330,15 @@ def main() -> None:
                         help="score the source copied unchanged, no model (calibration control)")
     parser.add_argument("--subjects", nargs="+", default=None,
                         help="defaults to the config's holdout_subjects")
+    parser.add_argument("--slab", action="store_true",
+                        help="score only Z_CLIP_RANGE with the submission's background "
+                             "zeroing, i.e. the same voxels the challenge sees")
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--batch", type=int, default=2)
     parser.add_argument("--out-dir", type=Path, default=REPO_ROOT / "reports" / "holdout")
+    parser.add_argument("--cache-dir", type=Path, default=None,
+                        help="3D volume cache; overrides data.params.cache_dir, which only "
+                             "the volumetric configs carry")
     args = parser.parse_args()
     if not args.checkpoint and not args.sweep and not args.identity:
         parser.error("pass --checkpoint, --sweep or --identity")
@@ -293,8 +351,15 @@ def main() -> None:
 
     crop = list(data.get("crop_size", []))
     depth = int(crop[0]) if len(crop) == 3 else 0
-    cache_dir = Path(data.get("cache_dir") or "")
-    split_dir = resolve_split_dir(cache_dir, str(data.get("prospective_split", "pro_train")))
+    # Only the three volumetric configs define cache_dir, so a 2D run's own config cannot
+    # locate the 3D volume cache on its own. Derive it from preprocessed_dir, which every
+    # config has, rather than making the caller pass an unrelated config just for its paths.
+    cache_dir = args.cache_dir or data.get("cache_dir")
+    if not cache_dir and data.get("preprocessed_dir"):
+        cache_dir = Path(data["preprocessed_dir"]) / "volumes_3d"
+        print(f"cache_dir derived from preprocessed_dir: {cache_dir}", flush=True)
+    split_dir = resolve_split_dir(Path(cache_dir or ""),
+                                  str(data.get("prospective_split", "pro_train")))
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -317,10 +382,14 @@ def main() -> None:
         name = "identity" if path is None else path.name
         print(f"=== {name} ===", flush=True)
         model = None if path is None else build_model(config, path, device)
+        # No axial_first flag any more. It was opt-in per config and only the two tubelet
+        # configs ever set it, so every 2D model was scored on sagittal planes while the
+        # volumetric ones were scored correctly -- a difference no one could see in the
+        # numbers. The transpose is unconditional in cached_volume now, because which
+        # plane the data lies on is a fact about preprocess.py, not a per-config choice.
         rows = evaluate(model, split_dir, subjects, device, depth, args.batch,
-                        bool(data.get("axial_first", False)), tta=args.tta,
-                        multicontrast=multicontrast,
-                        neighbour_offsets=neighbour_offsets)
+                        tta=args.tta, multicontrast=multicontrast,
+                        neighbour_offsets=neighbour_offsets, slab=args.slab)
         if not rows:
             print("  no transitions scored -- check cache_dir and subject ids", flush=True)
             continue
