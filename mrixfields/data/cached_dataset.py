@@ -24,8 +24,24 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+from ..audit import audit_file_loading
 from .transforms import CenterCropOrPad, ToTensor, ScaleToMinusOneOne, Compose
 from .utils import FIELD_STRENGTHS, FIELD_TO_DOMAIN, MODALITIES, get_joint_domain
+
+
+def load_image(path) -> np.ndarray:
+    """Read one cached slice, recording the access for the integrity audit.
+
+    Every read in this module goes through here rather than calling np.load directly.
+    The Data Integrity Policy (wiki 642237, Rule I.2) requires a path, size, fingerprint
+    and checksum for *every* data loading operation, and a single missed call site is
+    indistinguishable from not complying at all -- so there is exactly one place to miss.
+
+    audit_file_loading re-reads and hashes the file, which roughly triples the I/O per
+    slice. That is the cost of the audit, not an oversight.
+    """
+    audit_file_loading(path)
+    return np.load(path)["image"]
 
 
 def _cached_transform(crop_size: Optional[Tuple[int, int]] = None) -> Compose:
@@ -47,6 +63,21 @@ def _list_npz_files(base_dir: Path, split: str, modality: str, field: str) -> Li
     if not d.exists():
         return []
     return sorted(d.glob("*.npz"))
+
+
+# preprocess.py keeps SLICE_START..SLICE_END-1 = 72..291. Hard-coded rather than measured
+# from the split: at inference the model sees one 30-slice slab (Z_CLIP_RANGE), and a range
+# derived from that would put the slab's own middle at 0.5 instead of where it really sits.
+SLICE_INDEX_RANGE = (72, 291)
+
+
+def slice_position(path: Path | str) -> float:
+    """Normalised axial position in [0, 1] from a preprocessed file's ``_s<idx>`` suffix."""
+    match = re.search(r"_s(\d+)", Path(path).stem)
+    if match is None:
+        return 0.5
+    low, high = SLICE_INDEX_RANGE
+    return float(min(max((int(match.group(1)) - low) / (high - low), 0.0), 1.0))
 
 
 class CachedUnpairedDataset(Dataset):
@@ -80,8 +111,7 @@ class CachedUnpairedDataset(Dataset):
         return len(self.files)
 
     def __getitem__(self, index: int) -> Dict[str, torch.Tensor | str]:
-        npz = np.load(self.files[index])
-        image = npz["image"]  # (H, W), float32, stored as [0, 1], scaled to [-1, 1]
+        image = load_image(self.files[index])  # (H, W), float32, stored as [0, 1], scaled to [-1, 1]
 
         if self.transform:
             image = self.transform(image)
@@ -153,8 +183,8 @@ class CachedPairedDataset(Dataset):
 
     def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
         src_path, tgt_path = self.pairs[index]
-        src_img = np.load(src_path)["image"]
-        tgt_img = np.load(tgt_path)["image"]
+        src_img = load_image(src_path)
+        tgt_img = load_image(tgt_path)
 
         if self.transform:
             src_img = self.transform(src_img)
@@ -276,18 +306,24 @@ class CachedMultiContrastDataset(Dataset):
 
     def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
         source_paths, target_path = self.samples[index]
-        auxiliary = [self.transform(np.load(p)["image"]) for p in source_paths]
+        auxiliary = [self.transform(load_image(p)) for p in source_paths]
         primary = auxiliary[self.input_modalities.index(self.target_modality)]
         channels = [primary, *auxiliary]
         # 34: 2.5D context. Each offset appends the same (primary, T1W, T2W, T2FLAIR) block
         # read at a neighbouring slice, after the centre block, so a 4-channel checkpoint
         # widened with zeros for the new channels starts bit-identical to itself.
         for offset_paths in self.neighbours[index] if self.neighbour_offsets else ():
-            near = [self.transform(np.load(p)["image"]) for p in offset_paths]
+            near = [self.transform(load_image(p)) for p in offset_paths]
             channels.extend([near[self.input_modalities.index(self.target_modality)], *near])
         source = torch.cat(channels, dim=0)
-        target = self.transform(np.load(target_path)["image"])
-        return {"source": source, "target": target}
+        target = self.transform(load_image(target_path))
+        return {
+            "source": source,
+            "target": target,
+            # 39: where the slice sits along z. Read from the target path, which is the slice
+            # being predicted; the neighbours are offsets from it and share its position.
+            "slice_pos": torch.tensor(slice_position(target_path), dtype=torch.float32),
+        }
 
 
 class CachedMultiDomainDataset(Dataset):
@@ -351,7 +387,7 @@ class CachedMultiDomainDataset(Dataset):
 
     def __getitem__(self, index: int) -> Dict:
         npz_path, domain_idx, modality_name, field_strength = self.samples[index]
-        image = np.load(npz_path)["image"]
+        image = load_image(npz_path)
 
         # Sample reference from a different domain
         other_domains = [d for d in self.domain_files if d != domain_idx]
@@ -360,7 +396,7 @@ class CachedMultiDomainDataset(Dataset):
         else:
             ref_domain = domain_idx
         ref_path = random.choice(self.domain_files[ref_domain])
-        ref_image = np.load(ref_path)["image"]
+        ref_image = load_image(ref_path)
 
         if self.transform:
             image = self.transform(image)
@@ -374,3 +410,70 @@ class CachedMultiDomainDataset(Dataset):
             "ref_image": ref_image,
             "ref_domain": ref_domain,
         }
+
+
+class CachedFlowDataset(Dataset):
+    """Source and target stacks of all three contrasts, for conditional flow matching.
+
+    Differs from CachedMultiContrastDataset in what it returns rather than how it finds
+    files. That dataset builds an input of (primary, T1W, T2W, T2FLAIR) and a *single*
+    target contrast, because the model predicts one contrast at a time. Flow matching
+    predicts a three-channel velocity in one pass (section 38), so both endpoints of the
+    bridge are three-channel stacks in the fixed MODALITIES order, and nothing is
+    duplicated into a primary channel.
+
+    A slice is kept only when all three contrasts exist at *both* fields. Zero-filling an
+    absent contrast is not an option: zero is a real intensity here, and a zero-filled
+    channel would be indistinguishable from air the model is asked to reproduce.
+    """
+
+    def __init__(
+        self,
+        preprocessed_dir: str | Path,
+        split: str,
+        source_field: str,
+        target_field: str,
+        modalities: Optional[Tuple[str, ...]] = None,
+        crop_size: Tuple[int, int] = (368, 448),
+        transform: Optional[Callable] = None,
+    ):
+        self.preprocessed_dir = Path(preprocessed_dir)
+        self.transform = transform or _cached_transform(crop_size)
+        self.modalities = tuple(modalities or MODALITIES)
+        self.source_field = source_field
+        self.target_field = target_field
+
+        def _pair_key(path: Path) -> str:
+            return "_".join(path.stem.split("_")[-2:])
+
+        lookups: Dict[Tuple[str, str], Dict[str, Path]] = {}
+        for field in (source_field, target_field):
+            for modality in self.modalities:
+                files = _list_npz_files(self.preprocessed_dir, split, modality, field)
+                if not files:
+                    raise FileNotFoundError(
+                        f"No npz files for {modality} at {field} in "
+                        f"{self.preprocessed_dir / split}"
+                    )
+                lookups[(modality, field)] = {_pair_key(f): f for f in files}
+
+        keys = set.intersection(*(set(v) for v in lookups.values()))
+        self.samples: List[Tuple[Tuple[Path, ...], Tuple[Path, ...]]] = [
+            (tuple(lookups[(m, source_field)][k] for m in self.modalities),
+             tuple(lookups[(m, target_field)][k] for m in self.modalities))
+            for k in sorted(keys)
+        ]
+        if not self.samples:
+            raise ValueError(
+                f"No slices where all of {self.modalities} exist at both {source_field} "
+                f"and {target_field} for the same subject."
+            )
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
+        source_paths, target_paths = self.samples[index]
+        source = torch.cat([self.transform(load_image(p)) for p in source_paths], dim=0)
+        target = torch.cat([self.transform(load_image(p)) for p in target_paths], dim=0)
+        return {"source": source, "target": target}
