@@ -41,6 +41,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "experiment-pipeline")]
 from mrixfields.data.transforms import CenterCropOrPad  # noqa: E402
 from mrixfields.data.utils import get_joint_domain, load_nifti  # noqa: E402
 from mrixfields.zclip_constants import Z_CLIP_RANGE  # noqa: E402
+from mrixfields.data.cached_dataset import SLICE_INDEX_RANGE  # noqa: E402
 
 MODALITIES = ("T1W", "T2W", "T2FLAIR")
 FIELDS = ("0.1T", "1.5T", "3T", "5T", "7T")
@@ -85,8 +86,8 @@ def derive_shape(state: dict[str, torch.Tensor]) -> tuple[int, int, int]:
     return int(base_channels), int(max_channels), int(levels)
 
 
-def derive_unet_flags(state: dict[str, torch.Tensor]) -> tuple[bool, bool]:
-    """Read ConditionalUNet's two architecture flags back out of a state dict.
+def derive_unet_flags(state: dict[str, torch.Tensor]) -> tuple[bool, bool, bool]:
+    """Read ConditionalUNet's three architecture flags back out of a state dict.
 
     Both are visible in the tensors, so neither is taken on trust: a residual
     checkpoint carries residual_head.weight where a Tanh one carries
@@ -96,7 +97,11 @@ def derive_unet_flags(state: dict[str, torch.Tensor]) -> tuple[bool, bool]:
     """
     residual_output = "residual_head.weight" in state
     film_conditioning = any(key.startswith("film_projections.") for key in state)
-    return residual_output, film_conditioning
+    # 39: axial-position conditioning adds slice_embedding.*. Same reasoning as the other
+    # two -- it is visible in the tensors, so read it rather than take it on trust. Without
+    # this the keys would be unexpected at load and the position input silently ignored.
+    slice_conditioning = any(key.startswith("slice_embedding.") for key in state)
+    return residual_output, film_conditioning, slice_conditioning
 
 
 def derive_decoder_channels(state: dict[str, torch.Tensor]) -> int:
@@ -144,7 +149,7 @@ def build_model(
     if architecture == "conditional":
         from components.models.conditional_unet import ConditionalUNet
 
-        residual_output, film_conditioning = derive_unet_flags(weights)
+        residual_output, film_conditioning, slice_conditioning = derive_unet_flags(weights)
         # Input width is visible in the first encoder conv, so a 4-channel
         # multi-contrast checkpoint builds the model it was trained as instead of
         # failing in load_state_dict against the 1-channel default.
@@ -163,7 +168,8 @@ def build_model(
                 )
         print(
             f"derived from checkpoint: residual_output={residual_output} "
-            f"film_conditioning={film_conditioning} input_channels={input_channels}",
+            f"film_conditioning={film_conditioning} input_channels={input_channels} "
+            f"slice_conditioning={slice_conditioning}",
             flush=True,
         )
         model: torch.nn.Module = ConditionalUNet(
@@ -172,6 +178,30 @@ def build_model(
             max_channels=max_channels,
             levels=levels,
             residual_output=residual_output,
+            film_conditioning=film_conditioning,
+            slice_conditioning=slice_conditioning,
+        )
+    elif architecture == "flow":
+        from components.models.conditional_flow_unet import ConditionalFlowUNet
+
+        # 38: the velocity net predicts all three contrasts at once, so its channel count
+        # *is* len(MODALITIES) rather than a multi-contrast input around one primary. Read
+        # it, and the domain-table size, off the tensors for the same reason as everywhere
+        # else here: the config that trained a checkpoint is not always the one at hand.
+        channels = int(weights["encoders.0.0.weight"].shape[1])
+        num_domains = int(weights["source_embedding.weight"].shape[0])
+        film_conditioning = any(key.startswith("film_projections.") for key in weights)
+        print(
+            f"derived from checkpoint: channels={channels} num_domains={num_domains} "
+            f"film_conditioning={film_conditioning}",
+            flush=True,
+        )
+        model = ConditionalFlowUNet(
+            channels=channels,
+            num_domains=num_domains,
+            base_channels=base_channels,
+            max_channels=max_channels,
+            levels=levels,
             film_conditioning=film_conditioning,
         )
     elif architecture == "unconditional":
@@ -270,18 +300,100 @@ def predict_slab(
         images = images.mul(2).sub(1)
         source = torch.full((len(slices),), source_domain, device=device, dtype=torch.long)
         target = torch.full((len(slices),), target_domain, device=device, dtype=torch.long)
+        # 39: the z index of each slice, normalised on the same 72..291 range the training
+        # files carry in their _s<idx> suffix. `indices` are volume z indices, which is the
+        # very quantity slice_position() parses out of a filename, so the two agree by
+        # construction. None for a model without slice conditioning, which ignores it.
+        positions = None
+        if getattr(model, "slice_embedding", None) is not None:
+            low, high = SLICE_INDEX_RANGE
+            positions = torch.tensor(
+                [min(max((index - low) / (high - low), 0.0), 1.0) for index in indices],
+                device=device, dtype=torch.float32,
+            )
         with torch.inference_mode(), torch.autocast(device.type, enabled=device.type == "cuda"):
             if tta:
                 accumulated = None
                 for dims in ((), (-1,), (-2,), (-2, -1)):
                     view = torch.flip(images, dims) if dims else images
-                    result = model(view, target, source)
+                    result = model(view, target, source, positions)
                     result = torch.flip(result, dims) if dims else result
                     accumulated = result if accumulated is None else accumulated + result
                 predictions = accumulated / 4
             else:
-                predictions = model(images, target, source)
+                predictions = model(images, target, source, positions)
         predictions = predictions.float().cpu().numpy()[:, 0]
+        for index, prediction in zip(indices, predictions, strict=True):
+            output[:, :, index] = uncrop(np.clip(prediction, -1, 1) * 0.5 + 0.5)
+    return output
+
+
+def predict_slab_flow(
+    model: torch.nn.Module,
+    contrasts: list[np.ndarray],
+    modality: str,
+    source: str,
+    target: str,
+    device: torch.device,
+    batch_size: int,
+    steps: int,
+    tta: bool = False,
+) -> np.ndarray:
+    """Predict the submission slab by integrating the conditional flow (section 38).
+
+    Structurally different from predict_slab in one way that matters: the velocity network
+    takes the three contrasts as its three channels and moves all of them together, so
+    ``contrasts`` is the (T1W, T2W, T2FLAIR) stack at the source field and the requested
+    modality is selected out of the result. There is no channel-0 duplication -- that is a
+    ConditionalUNet convention for transferring single-channel weights and has no meaning
+    for a model whose output is three contrasts.
+
+    Each transition is therefore integrated once per output modality rather than once in
+    total, which is 3x the arithmetic. Left that way deliberately: the alternative is to
+    restructure main()'s per-file loop, and at 30 slices per slab the job is dominated by
+    reading four 364x436x364 volumes, not by the forward passes.
+
+    ``steps`` is not a free parameter. Section 38.6 measured the preference inverting with
+    adversarial refinement, and we reproduced it exactly (0.8946 at 1 step vs 0.9150 at 5
+    for a refined checkpoint); a stage-2 checkpoint wants 1 and a stage-3 checkpoint 5.
+    """
+    from components.models.conditional_flow_unet import heun_sample
+
+    start, stop = Z_CLIP_RANGE
+    crop = CenterCropOrPad(CROP_SIZE)
+    uncrop = CenterCropOrPad(contrasts[0].shape[:2])
+    output = np.zeros_like(contrasts[0], dtype=np.float32)
+    channel = MODALITIES.index(modality)
+
+    # One joint (modality, field) index per contrast channel, summed inside the model --
+    # the [B, 3] layout task3_flow trains with. A [B] tensor of plain field indices is the
+    # paper's variant and would need num_domains == len(FIELDS); refuse rather than guess.
+    if int(model.source_embedding.num_embeddings) != len(MODALITIES) * len(FIELDS):
+        raise SystemExit(
+            f"expected joint conditioning ({len(MODALITIES) * len(FIELDS)} domains), "
+            f"checkpoint has {model.source_embedding.num_embeddings}"
+        )
+    source_row = torch.tensor([[get_joint_domain(m, source) for m in MODALITIES]], device=device)
+    target_row = torch.tensor([[get_joint_domain(m, target) for m in MODALITIES]], device=device)
+
+    for batch_start in range(start, stop, batch_size):
+        indices = range(batch_start, min(batch_start + batch_size, stop))
+        slices = np.stack([[crop(volume[:, :, index]) for volume in contrasts]
+                           for index in indices])
+        images = torch.from_numpy(slices).to(device=device, dtype=torch.float32)
+        images = images.mul(2).sub(1)
+        count = images.shape[0]
+        with torch.inference_mode(), torch.autocast(device.type, enabled=device.type == "cuda"):
+            views = ((), (-1,), (-2,), (-2, -1)) if tta else ((),)
+            accumulated = None
+            for dims in views:
+                view = torch.flip(images, dims) if dims else images
+                result = heun_sample(model, view, target_row.expand(count, -1),
+                                     source_row.expand(count, -1), steps=steps)
+                result = torch.flip(result, dims) if dims else result
+                accumulated = result if accumulated is None else accumulated + result
+            predictions = accumulated / len(views)
+        predictions = predictions.float().cpu().numpy()[:, channel]
         for index, prediction in zip(indices, predictions, strict=True):
             output[:, :, index] = uncrop(np.clip(prediction, -1, 1) * 0.5 + 0.5)
     return output
@@ -396,6 +508,7 @@ def predict_to_slab_image(
     tta: bool = False,
     auxiliary_paths: list[Path] | None = None,
     neighbour_offsets: tuple[int, ...] = (),
+    steps: int = 5,
 ) -> nib.Nifti1Image:
     """Run the model on one volume and return the clipped submission slab.
 
@@ -410,7 +523,14 @@ def predict_to_slab_image(
 
     source_domain = get_joint_domain(modality, source)
     target_domain = get_joint_domain(modality, target)
-    if architecture == "tubelet":
+    if architecture == "flow":
+        # auxiliary_paths is the (T1W, T2W, T2FLAIR) stack at the source field, which is
+        # exactly the flow model's three channels -- `volume` is already one of them.
+        prediction = predict_slab_flow(
+            model, [load_nifti(path)[0] for path in auxiliary_paths], modality,
+            source, target, device, batch_size, steps=steps, tta=tta,
+        )
+    elif architecture == "tubelet":
         prediction = predict_slab_tubelet(
             model, volume, source_domain, target_domain, device, batch_size
         )
@@ -456,7 +576,7 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument(
         "--architecture",
-        choices=("unconditional", "conditional", "vanilla", "vit", "swin", "tubelet"),
+        choices=("unconditional", "conditional", "vanilla", "vit", "swin", "tubelet", "flow"),
         default="unconditional",
     )
     parser.add_argument(
@@ -478,6 +598,9 @@ def main() -> None:
     parser.add_argument("--neighbour-offsets", type=int, nargs="*", default=[],
                         help="2.5D axial offsets, e.g. -2 2. Must satisfy "
                              "4 * (1 + len(offsets)) == the checkpoint's input_channels.")
+    parser.add_argument("--steps", type=int, default=5,
+                        help="Heun steps, only used by --architecture flow. 1 for a "
+                             "stage-2 checkpoint, 5 after adversarial refinement (38.6)")
     parser.add_argument("--tta", action="store_true",
                         help="average the four in-plane flips; 2D architectures only")
     parser.add_argument("--dry-run", action="store_true", help="list the work without writing")
@@ -532,7 +655,10 @@ def main() -> None:
     first_conv = next((p for n, p in model.named_parameters()
                        if n == "encoders.0.0.weight"), None)
     multicontrast = first_conv is not None and first_conv.shape[1] > 1
-    if multicontrast:
+    if args.architecture == "flow":
+        print(f"flow: {', '.join(MODALITIES)} at the source field are the three channels, "
+              f"integrated together over {args.steps} Heun step(s)", flush=True)
+    elif multicontrast:
         print(f"multi-contrast: channel 0 duplicates the predicted contrast, then "
               f"{', '.join(MODALITIES)} at the source field", flush=True)
 
@@ -572,6 +698,7 @@ def main() -> None:
                     tta=args.tta,
                     auxiliary_paths=auxiliary_paths,
                     neighbour_offsets=tuple(args.neighbour_offsets),
+                    steps=args.steps,
                 )
                 if clipped.shape != EXPECTED_SHAPE:
                     raise RuntimeError(
