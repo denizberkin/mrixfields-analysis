@@ -103,3 +103,4 @@ docker_submission/
 
 # Audit run outputs of experiment-pipeline/train_task3_audit.py
 experiment-pipeline/console-logs/
+MRIxFields2026_*
