@@ -152,6 +152,24 @@ predictions first.
 
 For an identity-control baseline archive, use `scripts/make_source_submission.py`.
 
+### Audited reproduction for the Data Integrity Policy (Task 3)
+
+`audit/` holds everything for the `{teamname}-audit-materials.zip` the challenge requires
+of top-9 teams: the package README, the submission record, and `task3_audit_colab.ipynb`,
+which clones this repo on Colab and runs one command --
+
+```bash
+cd experiment-pipeline
+python3 -u train_task3_audit.py --stages all --raw-dir <NIfTI root>     --preprocessed-dir <local> --output-dir <Drive>/runs --mirror-dir <Drive>
+```
+
+-- that re-executes the chain behind submission 9780368 `mc_ssim_slice_avg_tta`
+(`task3_retro_pretrain_big` -> widen -> `task3_mc_ssim_slice` -> mean of e6-e8) under
+the official audit tools (`experiment-pipeline/audit_*.py`, vendored unmodified), with
+resume-from-checkpoint and gradient accumulation so batch 64 holds on any GPU.
+`audit/make_audit_package.py` assembles the zip. `scripts/pull_synapse_docker.py` reads
+the test-phase image back out of the Synapse registry without a Docker daemon.
+
 ### Spectral analysis
 
 ```bash

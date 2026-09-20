@@ -1811,3 +1811,41 @@ pushed as `docker.synapse.org/syn76236366/task3:v2` and `:latest`, submitted wit
 v1 warning "NO docker image tag provided" was `synapseclient.Synapse.submit` defaulting
 `dockerTag='latest'` while only `:v1` had been pushed. The entrypoint was rehearsed on all 120
 testbed samples (§36.5); the built image itself has not been run against the testbed.
+
+## 43. Data Integrity Policy: the audited re-run of the submitted chain (2026-09-20)
+
+The organizers want the training logs behind `mc_ssim_slice_avg_tta` (9780368) in the form of
+wiki 642237: official runtime monitor, dataset-access log, per-iteration training log,
+per-epoch validation and checkpoint lines, plus a reproducibility package. The original runs
+(`task3_retro_pretrain_big` 09-06/07, `task3_mc_ssim_slice` 09-11) predate the tools and their
+machine is gone, so the chain is re-executed under the tools on Colab from the same two configs.
+
+- `experiment-pipeline/audit_monitor.py`, `audit_utils.py`: vendored byte-identical (LF; the
+  pipeline's `.gitattributes` forces CRLF on everything else, which would change the fingerprint
+  the tools log). `audit_dataset.py` is the editable wrapper and now owns `load_image` /
+  `load_volume`, the only two functions that read a file anywhere in the project.
+- `train_task3_audit.py`: the monitored entry point. `import audit_monitor` on line 2 as required
+  (so no docstring, no `from __future__`). Stages preprocess -> stage1 -> widen -> stage2 ->
+  average -> export -> predict, each skipped when done and resumed from its newest checkpoint
+  (model + optimizer + scaler now saved). Logs mirrored to Drive incrementally
+  (`audit_mirror.py`); `console-logs/segments.jsonl` maps pids to launches.
+- Trainer: `[Validation]` and `[Checkpoint]` lines (rules 4/5), a validation pass during
+  pretraining (fixed 1,024 retro slices, fixed mask), `accumulation_steps` so the optimizer
+  always steps on 64 slices -- InstanceNorm + per-sample-mean losses make that the batch-64
+  gradient exactly. Console echo of the training logger off (200k lines would kill a notebook).
+- Validation without a held-out subject: the model was trained on all three, so the per-epoch
+  record is a fixed, unaugmented, strided subset of the training slices, labelled as such in
+  `data-split.md` and the README. Holding one out would have reproduced a different model.
+- `scripts/pull_synapse_docker.py` reads `syn76236366/task3:v2` back over the registry API
+  (no daemon; Docker Desktop and WSL2 cannot start here, virtualisation is off). Confirms the
+  shipped `task3.pt` (sha256 be132195...) and that the container's `ConditionalUNet` is
+  byte-identical to the pipeline's. Pulled files in `docker_submission/` (gitignored).
+- Cost: preprocessing ~1-2 h (Drive read + 426k compressed npz), stage 1 ~4-5 h and stage 2
+  ~1 h on an A100; a T4 needs several resumed sessions. `--smoke` runs the whole chain on two
+  subjects x two fields in ~10 min and is the first cell of the notebook.
+- [ ] Commit + push `experiment-pipeline` first, then this repo with the submodule pointer, or
+  the Colab clone will not see any of it.
+- [ ] Run the smoke cell, then the full run, then `make_audit_package.py`; email the Drive link
+  as `inzva_mri-audit-materials` (the wiki's 09-17 date has passed -- confirm the extension).
+- [ ] Sign and send the Data Usage Declaration (wiki, Additional Notes 4) if not already done.
+

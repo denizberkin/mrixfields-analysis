@@ -4,7 +4,10 @@ The policy requires five logs, all produced by https://github.com/MRIxFields/aud
 runtime monitoring, dataset access, per-iteration training, per-epoch validation, and
 checkpoint. Those tools are vendored **unmodified** in ``experiment-pipeline/`` --
 ``audit_monitor.py`` and ``audit_utils.py`` are fingerprinted by the organizers and must
-not be edited.
+not be edited. ``audit_dataset.py`` (editable past its first three lines) owns the two
+functions every file read goes through, ``load_image`` and ``load_volume``; this module
+re-exports them so the dataset classes and the preprocessing script never import the
+tools by bare name.
 
 This module exists so the rest of the codebase never imports them by bare name. They are
 written to be imported from the directory they sit in, but our data classes are imported
@@ -33,9 +36,12 @@ def _load() -> tuple[Callable[..., Any], ...]:
     if str(PIPELINE_ROOT) not in sys.path:
         sys.path.insert(0, str(PIPELINE_ROOT))
     from audit_utils import audit_file_loading, get_mem_usage, get_train_logger
+    # Imported here rather than by the datasets so its digest line ("Official dataset,
+    # <path>, <sha256>") lands in the dataset-access log of every process that reads.
+    from audit_dataset import load_image, load_volume
 
     AUDIT_ENABLED = True
-    return audit_file_loading, get_mem_usage, get_train_logger
+    return audit_file_loading, get_mem_usage, get_train_logger, load_image, load_volume
 
 
 def _resilient(record: Callable[..., Any]) -> Callable[..., Any]:
@@ -75,7 +81,7 @@ def _resilient(record: Callable[..., Any]) -> Callable[..., Any]:
 
 
 try:
-    audit_file_loading, get_mem_usage, get_train_logger = _load()
+    audit_file_loading, get_mem_usage, get_train_logger, load_image, load_volume = _load()
     audit_file_loading = _resilient(audit_file_loading)
 except Exception as exc:  # pragma: no cover - only when the tools are absent
     _REASON = exc
@@ -102,6 +108,20 @@ except Exception as exc:  # pragma: no cover - only when the tools are absent
                 pass
 
         return _Null()
+
+    def load_image(path):  # type: ignore[misc]
+        """Unaudited fallback: the same read audit_dataset.load_image performs."""
+        import numpy as np
+
+        _warn_once()
+        return np.load(path)["image"]
+
+    def load_volume(path):  # type: ignore[misc]
+        """Unaudited fallback, identical to mrixfields.data.utils.load_nifti."""
+        from .data.utils import load_nifti
+
+        _warn_once()
+        return load_nifti(path)
 
 
 def reinit_for_worker(worker_id: int | None = None) -> None:
@@ -134,5 +154,5 @@ def reinit_for_worker(worker_id: int | None = None) -> None:
     audit_utils._logger = audit_utils.secure_logger.get_logger("file-loading")
 
 
-__all__ = ["audit_file_loading", "get_mem_usage", "get_train_logger", "reinit_for_worker",
-           "AUDIT_ENABLED"]
+__all__ = ["audit_file_loading", "get_mem_usage", "get_train_logger", "load_image",
+           "load_volume", "reinit_for_worker", "AUDIT_ENABLED"]

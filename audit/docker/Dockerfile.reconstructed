@@ -1,0 +1,20 @@
+# Reconstructed from the layer history of docker.synapse.org/syn76236366/task3:v2
+# (sha256:7165fe78625729b778f37e3752221891a62d61014cb6876e5e60f4a22cf04c5a) with
+# scripts/pull_synapse_docker.py history. An image does not carry its Dockerfile; the
+# instructions below are the non-empty layers and ENV/WORKDIR/ENTRYPOINT metadata in order.
+# Base: Ubuntu 24.04 with Python 3.12 and torch 2.13.0 / CUDA 12.6.3 (layers 0-4,
+# ARG PYTORCH_VERSION=2.13.0 CUDA_VERSION=12.6.3, LABEL com.nvidia.volumes.needed=nvidia_driver).
+
+FROM <ubuntu-24.04 + python3.12 + torch 2.13.0+cu126 base>   # e.g. pytorch/pytorch:2.13.0-cuda12.6-cudnn9-runtime
+
+WORKDIR /app
+COPY requirements.txt /app/requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r /app/requirements.txt
+COPY inference.py /app/inference.py
+COPY mrx /app/mrx
+COPY weights /app/weights
+RUN chmod a+x /app/inference.py
+ENV HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TORCH_HOME=/app/.torch
+RUN python3 -c "import sys, torch; sys.path.insert(0, '/app'); print('interpreter', sys.executable) ..."   # build-time import self-check
+ENTRYPOINT ["python3", "/app/inference.py"]
+CMD ["--input", "/input", "--output", "/output"]

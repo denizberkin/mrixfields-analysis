@@ -63,7 +63,8 @@ EXPECTED_SHAPE = (364, 436, Z_CLIP_RANGE[1] - Z_CLIP_RANGE[0])
 
 def find_split(data_dir: Path) -> Path:
     """Validation split directory, tolerating the dataset's inconsistent casing."""
-    for name in ("Validating_prospective", "validating_prospective"):
+    # "validation_prospective" is how the split is named on the team's Drive copy.
+    for name in ("Validating_prospective", "validating_prospective", "validation_prospective"):
         candidate = data_dir / name
         if candidate.is_dir():
             return candidate

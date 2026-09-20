@@ -24,24 +24,18 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from ..audit import audit_file_loading
+from ..audit import load_image
 from .transforms import CenterCropOrPad, ToTensor, ScaleToMinusOneOne, Compose
 from .utils import FIELD_STRENGTHS, FIELD_TO_DOMAIN, MODALITIES, get_joint_domain
 
-
-def load_image(path) -> np.ndarray:
-    """Read one cached slice, recording the access for the integrity audit.
-
-    Every read in this module goes through here rather than calling np.load directly.
-    The Data Integrity Policy (wiki 642237, Rule I.2) requires a path, size, fingerprint
-    and checksum for *every* data loading operation, and a single missed call site is
-    indistinguishable from not complying at all -- so there is exactly one place to miss.
-
-    audit_file_loading re-reads and hashes the file, which roughly triples the I/O per
-    slice. That is the cost of the audit, not an oversight.
-    """
-    audit_file_loading(path)
-    return np.load(path)["image"]
+# Every read in this module goes through ``load_image`` rather than np.load directly. It
+# lives in the official (editable) dataset wrapper, experiment-pipeline/audit_dataset.py,
+# whose digest the audit tools log at import; it calls audit_file_loading before the read.
+# The Data Integrity Policy (wiki 642237, Rule I.2) requires a path, size, fingerprint and
+# checksum for *every* data loading operation, and a single missed call site is
+# indistinguishable from not complying at all -- so there is exactly one place to miss.
+# audit_file_loading re-reads and hashes the file, which roughly triples the I/O per slice.
+# That is the cost of the audit, not an oversight.
 
 
 def _cached_transform(crop_size: Optional[Tuple[int, int]] = None) -> Compose:

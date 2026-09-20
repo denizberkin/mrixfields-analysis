@@ -1,0 +1,16 @@
+# Runtime environment for the audited Task 3 training (train_task3_audit.py) and inference
+# (scripts/make_task3_submission.py). Python >= 3.12 (tomllib, PEP 695 generics in the
+# pipeline). The exact versions of the audited run are in logs/console-logs/environment_*.txt;
+# the run used Google Colab's pre-installed CUDA torch, which is why torch is a floor here.
+#
+#   pip install -r requirements.txt
+#   (for a CUDA build: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126)
+
+torch>=2.4
+torchvision>=0.19
+numpy>=1.26
+nibabel>=5.2
+lpips>=0.1.4          # LPIPS loss (AlexNet backbone, frozen; downloads torchvision's alexnet weights on first use)
+tqdm>=4.66
+psutil>=7.2.2         # required by the official audit tools (their pyproject pins this floor)
+scikit-image>=0.22    # scripts/eval_holdout.py scoring only; not needed to train or to build a submission

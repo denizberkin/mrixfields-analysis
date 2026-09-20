@@ -28,6 +28,8 @@ Usage:
 
 import argparse
 import json
+import shutil
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -36,8 +38,9 @@ from tqdm import tqdm
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from mrixfields.audit import load_volume, reinit_for_worker
 from mrixfields.data.utils import (
-    load_nifti, save_nifti,
+    save_nifti,
     FIELD_STRENGTHS, MODALITIES,
     SPLIT_ABBR, ABBR_TO_SPLIT,
 )
@@ -139,12 +142,33 @@ def extract_slices_from_volume(
     output_dir: Path,
     dtype: str = "float32",
     save_debug_png: bool = False,
+    staging_dir: Path | None = None,
+    data_root: Path | None = None,
 ) -> dict:
     """Extract fixed axial slices from a 3D volume, save as npz.
 
     Input volumes are in [0, 1]; output slices are float32 in [0, 1].
+
+    ``staging_dir``: copy the volume there (under its path relative to ``data_root``, so
+    the staged path still carries split, modality, field and subject id) and read the
+    copy. The audit hook reads a file ~2.5x over to fingerprint it; against a mounted
+    Google Drive that is 2.5x the download, against local disk it is nothing. The copy is
+    removed once the slices are written, so the staging area never holds more than one
+    volume per worker.
     """
-    data, _ = load_nifti(nifti_path)  # (364, 436, 364) float32
+    source_path = nifti_path
+    staged: Path | None = None
+    if staging_dir is not None:
+        relative = nifti_path.relative_to(data_root) if data_root else Path(nifti_path.name)
+        staged = staging_dir / relative
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(nifti_path, staged)
+        source_path = staged
+    try:
+        data, _ = load_volume(source_path)  # (364, 436, 364) float32, audited read
+    finally:
+        if staged is not None:
+            staged.unlink(missing_ok=True)
     data = data.astype(np.float32)
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -259,56 +283,80 @@ def run_extract_slices(args):
     total_volumes = 0
     total_slices = 0
     all_meta = []
+    staging_dir = Path(args.staging_dir) if getattr(args, "staging_dir", None) else None
+    workers = max(1, int(getattr(args, "workers", 1) or 1))
+    # Volume-level parallelism: each worker reads one NIfTI and writes its 220 compressed
+    # npz files, which is where the time goes (np.savez_compressed, not the read). Workers
+    # are forked, so the audit log handle inherited from the parent has to be reopened in
+    # each -- the same reinit the DataLoader workers use -- or every worker's first read
+    # raises on a dead stream.
+    pool = ProcessPoolExecutor(workers, initializer=reinit_for_worker) if workers > 1 else None
 
-    for split in requested_splits:
-        abbr = SPLIT_ABBR[split]
-        for mod in modalities:
-            for field in fields:
-                nifti_files = _list_nifti_files(data_dir, split, mod, field)
-                if not nifti_files:
-                    continue
+    try:
+        for split in requested_splits:
+            abbr = SPLIT_ABBR[split]
+            for mod in modalities:
+                for field in fields:
+                    nifti_files = _list_nifti_files(data_dir, split, mod, field)
+                    if not nifti_files:
+                        continue
 
-                out_subdir = output_dir / abbr / mod / field
+                    out_subdir = output_dir / abbr / mod / field
 
-                if args.debug:
-                    nifti_files = nifti_files[:1]  # 1 case only
-                elif cap:
-                    nifti_files = nifti_files[:cap]
+                    if args.debug:
+                        nifti_files = nifti_files[:1]  # 1 case only
+                    elif cap:
+                        nifti_files = nifti_files[:cap]
 
-                desc = f"{abbr}/{mod}/{field}"
-                n_expected = SLICE_END - SLICE_START
-                for nifti_path in tqdm(nifti_files, desc=desc, leave=False):
-                    subject_id = _extract_subject_id(nifti_path.name)
+                    desc = f"{abbr}/{mod}/{field}"
+                    n_expected = SLICE_END - SLICE_START
+                    pending = []
+                    for nifti_path in nifti_files:
+                        subject_id = _extract_subject_id(nifti_path.name)
 
-                    if args.skip_existing:
-                        existing = list(out_subdir.glob(f"{abbr}_{mod}_{field}_{subject_id}_s*.npz"))
-                        if len(existing) == n_expected:
-                            all_meta.append({
-                                "subject_id": subject_id,
-                                "source_file": nifti_path.name,
-                                "n_slices": n_expected,
-                                "shape": None,
-                                "skipped": True,
-                            })
-                            total_volumes += 1
-                            total_slices += n_expected
-                            continue
+                        if args.skip_existing:
+                            existing = list(out_subdir.glob(f"{abbr}_{mod}_{field}_{subject_id}_s*.npz"))
+                            if len(existing) == n_expected:
+                                all_meta.append({
+                                    "subject_id": subject_id,
+                                    "source_file": nifti_path.name,
+                                    "n_slices": n_expected,
+                                    "shape": None,
+                                    "skipped": True,
+                                })
+                                total_volumes += 1
+                                total_slices += n_expected
+                                continue
 
-                    meta = extract_slices_from_volume(
-                        nifti_path=nifti_path,
-                        subject_id=subject_id,
-                        split_abbr=abbr,
-                        modality=mod,
-                        field=field,
-                        output_dir=out_subdir,
-                        dtype=args.dtype,
-                        save_debug_png=args.debug,
-                    )
-                    all_meta.append(meta)
-                    total_volumes += 1
-                    total_slices += meta["n_slices"]
+                        kwargs = dict(
+                            nifti_path=nifti_path,
+                            subject_id=subject_id,
+                            split_abbr=abbr,
+                            modality=mod,
+                            field=field,
+                            output_dir=out_subdir,
+                            dtype=args.dtype,
+                            save_debug_png=args.debug,
+                            staging_dir=staging_dir,
+                            data_root=data_dir if staging_dir else None,
+                        )
+                        pending.append(kwargs)
 
-                print(f"  {desc}: {len(nifti_files)} volumes → {len(nifti_files) * (SLICE_END - SLICE_START)} slices")
+                    if pool is None:
+                        results = (extract_slices_from_volume(**kw) for kw in pending)
+                    else:
+                        results = (f.result() for f in
+                                   [pool.submit(extract_slices_from_volume, **kw) for kw in pending])
+                    for meta in tqdm(results, total=len(pending), desc=desc, leave=False):
+                        all_meta.append(meta)
+                        total_volumes += 1
+                        total_slices += meta["n_slices"]
+
+                    print(f"  {desc}: {len(nifti_files)} volumes → {len(nifti_files) * (SLICE_END - SLICE_START)} slices",
+                          flush=True)
+    finally:
+        if pool is not None:
+            pool.shutdown(wait=True)
 
     # Save manifest
     manifest_out = {
@@ -368,6 +416,13 @@ def main():
                            help="Skip subjects whose full set of 220 slices already exists in output_dir.")
     p_extract.add_argument("--dtype", choices=("float16", "float32"), default="float32",
                            help="Cached image dtype (default: float32). float16 roughly halves disk usage.")
+    p_extract.add_argument("--workers", type=int, default=1,
+                           help="Volumes processed in parallel (default 1). The compressed npz writes "
+                                "dominate, so this scales close to linearly with cores.")
+    p_extract.add_argument("--staging_dir", type=str, default=None,
+                           help="Copy each volume here (local disk) before reading it. For a data_dir "
+                                "on a mounted Google Drive this turns the audit hook's 2.5x re-read "
+                                "into a single download; the copy is deleted after use.")
     p_extract.add_argument("--max_subjects", type=int, default=None,
                            help="Cap volumes taken per split/modality/field. The retrospective split is "
                                 "1939 volumes (~427k slices, ~40GB at float16) but is unpaired, so it is "

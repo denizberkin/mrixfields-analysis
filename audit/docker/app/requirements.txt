@@ -1,0 +1,8 @@
+# torch is already in the base image (2.13.0+cu126, in /usr/local/lib/python3.12/
+# dist-packages); pinning it here would force a redundant multi-GB reinstall.
+nibabel==5.4.2
+# Deliberately a floor, not the == pin the rest of this repo uses. The image ships its
+# own numpy alongside torch, and forcing a different one risks an ABI mismatch with the
+# torch build for no gain: every number that matters is computed in torch, and numpy
+# only holds, stacks and clips arrays here.
+numpy>=1.26

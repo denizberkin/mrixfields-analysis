@@ -95,5 +95,11 @@ audit-logs/
 .leaderboard_teams.json
 
 # Test-phase container (weights + Synapse project id) and Colab notebooks: kept local.
-docker/
-notebooks/
+/docker/
+/notebooks/
+
+# Pulled test-phase image contents (scripts/pull_synapse_docker.py): weights + Synapse ids, kept local.
+docker_submission/
+
+# Audit run outputs of experiment-pipeline/train_task3_audit.py
+experiment-pipeline/console-logs/
