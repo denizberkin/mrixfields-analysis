@@ -39,6 +39,22 @@ spread measured for this architecture is ~0.001 SSIM, so the re-run reproduces t
 model to within run-to-run variation on different hardware (A100 / torch 2.11 vs the original
 workstation).
 
+## Inference-path check with the shipped weights
+
+To separate training variation from any drift in the submission builder, the container's
+own `task3.pt` (pulled from `syn76236366/task3:v2`, sha256 `be132195…`) was run through the
+same `make_task3_submission.py --tta` on 2026-09-21 and submitted:
+
+| | |
+|---|---|
+| Submission ID | **9780985** |
+| Submission name | **`re-infer`** |
+| SSIM / nRMSE / LPIPS | **0.913652** / 0.237969 / 0.090899 |
+
+Identical to 9780368 to the sixth decimal in every metric and every modality: the shipped
+weights are the leaderboard weights and the inference path is unchanged, so the 0.001 gap
+of the re-run (9780978) is training-run variation only.
+
 ## Lineage on the leaderboard (the chain the audited run reproduces)
 
 Each row keeps everything above it and changes one thing. Rows in bold are the two
