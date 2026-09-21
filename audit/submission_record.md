@@ -19,6 +19,18 @@ metrics; SSIM is the ranked one. All entries are by the same submitter (team id 
 | Inference | `scripts/make_task3_submission.py --architecture conditional --tta` (4-flip TTA) |
 | Test-phase container | `docker.synapse.org/syn76236366/task3:v2`, digest `sha256:7165fe78625729b778f37e3752221891a62d61014cb6876e5e60f4a22cf04c5a`, same weights (`/app/weights/task3.pt`, sha256 `be132195d8afc96494aa9c3a252065cadb97084547d421111b79dd392567063b`), same TTA, full 364-slice volumes |
 
+## The audited re-run
+
+The logs in this package come from a re-execution of the chain on 2026-09-20 (README §7).
+Its own validation-phase ZIP (`runs/submission_reproduced/task3.zip`, 4-flip TTA) was
+submitted to the same queue so the two can be compared directly:
+
+| | |
+|---|---|
+| Submission ID | _(fill in after submitting)_ |
+| Submission name | `audit_rerun_mc_ssim_slice_avg_tta` |
+| SSIM / nRMSE / LPIPS | _(fill in)_ |
+
 ## Lineage on the leaderboard (the chain the audited run reproduces)
 
 Each row keeps everything above it and changes one thing. Rows in bold are the two

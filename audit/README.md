@@ -170,11 +170,12 @@ are labelled as training-subset values; the challenge validation split has no ta
 was used only to build leaderboard submissions. Checkpoints were chosen by leaderboard
 score (see `submission_record.md`), never by these values.
 
-**Checkpoint history.** Every checkpoint of both stages is retained (`logs/runs/*/artifacts/`
-in the persistent copy; `logs/export/checksums.sha256` lists their sha256). The package
-ships the weights-only final model `logs/export/task3_final_weights.pt`; intermediate
-checkpoints (~110 MB each, model + optimizer) are available on request or from the Drive
-folder if the 10 GB limit does not allow them all.
+**Checkpoint history.** Every checkpoint of both stages is included, unaltered, under
+`logs/runs/<experiment>/artifacts/` (model + optimizer + AMP-scaler state, ~105-112 MB
+each): 6 pretraining checkpoints (every 5,000 steps), fine-tune epochs 1-25, the widened
+seed, stage-2 epochs 1-8 and `avg_e6_e8.pt`. `logs/export/checksums.sha256` lists the sha256
+of each, and `logs/export/task3_final_weights.pt` is the weights-only copy of `avg_e6_e8.pt`
+in the form the container loads.
 
 **Pretrained model.** The only pretraining is stage 1's masked-image pretraining on the
 challenge's own retrospective split, fully logged here (its `[Validation]` lines give the
@@ -182,21 +183,44 @@ masked-L1 and inpainting SSIM through the 30,000 steps). No external pretrained 
 are used; the LPIPS loss uses the standard `lpips` package's AlexNet weights, which are
 frozen and part of the loss, not of the model.
 
-## 7. Correspondence with the original runs
+**Launch history.** `logs/console-logs/segments.jsonl` records the one launch that produced
+the run (pid 3120, 2026-09-20 18:48:00 UTC). Three launches in the preceding two minutes
+(pids 2825, 2888, 2985; 18:46:56, 18:47:09, 18:47:30 UTC) exited within a second at
+start-up -- mistyped command-line flags (`--mini_batch`, `--micro_batch`) and a re-launch --
+before any data was accessed; each left the tools' three 1 KB start-up stubs
+(`monitor_/file-loading_/training_<pid>_*.log.csv`), which are kept as they are.
+
+## 7. The audited run
+
+| | |
+|---|---|
+| Launched | 2026-09-20 18:48:00 UTC, Google Colab, one process (pid 3120), all stages in sequence |
+| Hardware / software | NVIDIA A100-SXM4-40GB; Python 3.13.15; torch 2.11.0+cu128, CUDA 12.8, cuDNN 91900 (`logs/console-logs/environment_20260920_184806.txt`) |
+| Batching | 64 slices per optimizer step, no accumulation (`--micro-batch 64`), 8 DataLoader workers -- the original setting |
+| Wall-clock | 5.12 h: preprocessing 29.5 min (1,939 + 45 volumes -> 436,480 slices), pretraining 19:18-21:36, stage-1 fine-tune 21:36-23:05, stage-2 23:05-23:40, average + export + validation ZIP to 23:55 |
+| Pretraining | validation masked-L1 (1,024 fixed retrospective slices, fixed mask) 0.0771 at step 2,500 -> 0.0655 at 30,000; final training masked-L1 0.0716 |
+| Stage 1 | training-subset validation SSIM 0.8520 (e1) -> 0.9437 (e5) -> 0.9482 (e10) -> 0.9536 (e20) -> **0.9550 (e25)**; total loss 0.0637 -> 0.0157 |
+| Stage 2 | 0.9580 (e1) -> 0.9624 (e6) -> 0.9625 (e7) -> **0.9632 (e8)**; total loss 0.0382 -> 0.0332 |
+| Final weights | `avg_e6_e8.pt` (mean of stage-2 e6/e7/e8) = `logs/export/task3_final_weights.pt`, 78 tensors |
+| Leaderboard twin | `runs/submission_reproduced/task3.zip` (180 files, 4-flip TTA) -- submitted to the validation queue as recorded in `submission_record.md` |
+
+## 8. Correspondence with the original runs
 
 The submitted weights were produced on 2026-09-06/07 (stage 1, run `task3_retro_pretrain_big`)
 and 2026-09-11 (stage 2, run `task3_mc_ssim_slice`) on the team's workstation, before the
 audit tools were available, and the machine's logs are not of the required form. The
-audited run here is a re-execution of the same two configs (`configs/task3_retro_pretrain_big.toml`
+audited run in §7 is a re-execution of the same two configs (`configs/task3_retro_pretrain_big.toml`
 and `configs/task3_mc_ssim_slice.toml` are kept in `experiment-pipeline/configs/` for
 comparison; the `task3_audit_*` copies differ only in tracker, paths, checkpoint cadence,
 the validation subset and the micro-batch mechanism described above). Training on
 different hardware with cuDNN's non-deterministic kernels does not reproduce the weights
 bit for bit; the consistency check is the `predict` stage's validation ZIP scored on the
-leaderboard against submission 9780368, and `logs/export/reference_comparison.json`
-(tensor-wise difference against the shipped `task3.pt`).
+leaderboard against submission 9780368. The shipped weights are included at
+`code/docker/app/weights/task3.pt` next to the reproduced `logs/export/task3_final_weights.pt`,
+so a tensor-wise comparison is a `torch.load` of each; the run itself did not write
+`reference_comparison.json` because the shipped weights were not on the audit machine.
 
-## 8. Contact
+## 9. Contact
 
 Berkin Deniz Kahya — Synapse `denizberkin` — via the challenge Discussion board or the
 team's Synapse project.

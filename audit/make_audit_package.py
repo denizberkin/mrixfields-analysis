@@ -67,7 +67,8 @@ LOGS = [
               "*.sha256", "*.txt"], True),
     ("runs/export", ["*"], True),      # weights-only final model, checksums, data-split.md
     ("runs", ["*.pt"], False),
-    ("submission_reproduced", ["task3.zip"], True),
+    # runs/submission_reproduced/task3.zip (1.3 GB) is deliberately left out: it is the
+    # leaderboard submission itself, recorded by ID in submission_record.md.
 ]
 SECRET_KEYS = {"PERSONAL_ACCESS_TOKEN", "SYNAPSE_AUTH_TOKEN", "AUTH_TOKEN", "GITHUB_TOKEN"}
 TEXT_SUFFIXES = {".py", ".toml", ".md", ".txt", ".json", ".jsonl", ".ipynb"}

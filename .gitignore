@@ -104,3 +104,7 @@ docker_submission/
 # Audit run outputs of experiment-pipeline/train_task3_audit.py
 experiment-pipeline/console-logs/
 MRIxFields2026_*
+
+# Gathered Colab audit run (9.5 GB) and the extracted test-phase container: local only.
+/docker_final_logs/
+/task3_extracted/
