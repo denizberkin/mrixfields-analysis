@@ -202,7 +202,7 @@ before any data was accessed; each left the tools' three 1 KB start-up stubs
 | Stage 1 | training-subset validation SSIM 0.8520 (e1) -> 0.9437 (e5) -> 0.9482 (e10) -> 0.9536 (e20) -> **0.9550 (e25)**; total loss 0.0637 -> 0.0157 |
 | Stage 2 | 0.9580 (e1) -> 0.9624 (e6) -> 0.9625 (e7) -> **0.9632 (e8)**; total loss 0.0382 -> 0.0332 |
 | Final weights | `avg_e6_e8.pt` (mean of stage-2 e6/e7/e8) = `logs/export/task3_final_weights.pt`, 78 tensors |
-| Leaderboard twin | `runs/submission_reproduced/task3.zip` (180 files, 4-flip TTA) -- submitted to the validation queue as recorded in `submission_record.md` |
+| Leaderboard twin | `runs/submission_reproduced/task3.zip` (180 files, 4-flip TTA) submitted as **9780978 `fcheck`**: SSIM **0.912662** / nRMSE 0.240793 / LPIPS 0.092530, against 0.913652 / 0.237970 / 0.090899 for the original weights (9780368) -- a 0.001 SSIM gap, within run-to-run variation |
 
 ## 8. Correspondence with the original runs
 

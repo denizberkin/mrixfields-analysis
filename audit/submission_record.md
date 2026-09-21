@@ -27,9 +27,17 @@ submitted to the same queue so the two can be compared directly:
 
 | | |
 |---|---|
-| Submission ID | _(fill in after submitting)_ |
-| Submission name | `audit_rerun_mc_ssim_slice_avg_tta` |
-| SSIM / nRMSE / LPIPS | _(fill in)_ |
+| Submission ID | **9780978** |
+| Submission name | **`fcheck`** |
+| Submitted | 2026-09-21 07:25 UTC, entity syn77515671 |
+| SSIM / nRMSE / LPIPS | **0.912662** / 0.240793 / 0.092530 |
+| Per modality SSIM | T1W 0.913241 · T2W 0.919319 · T2FLAIR 0.905426 |
+
+Against the original weights (9780368): SSIM −0.000990, nRMSE +0.002823, LPIPS +0.001631;
+per-modality SSIM within 0.0022 (T1W −0.0002, T2W −0.0005, T2FLAIR −0.0022). The seed-to-seed
+spread measured for this architecture is ~0.001 SSIM, so the re-run reproduces the submitted
+model to within run-to-run variation on different hardware (A100 / torch 2.11 vs the original
+workstation).
 
 ## Lineage on the leaderboard (the chain the audited run reproduces)
 
