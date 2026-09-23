@@ -78,7 +78,9 @@ submissions/
 # LaTeX build junk stay out. Must sit after the global *.png rule above to win.
 /reports/*
 !/reports/*.tex
+!/reports/*.md
 !/reports/figures/
+!/reports/logos/
 !/reports/spectral/
 !/reports/tables/
 !/reports/visuals/
