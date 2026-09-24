@@ -202,17 +202,23 @@ def main() -> None:
         axes[r, 0].yaxis.set_visible(True)
         axes[r, 0].set_yticks([])
 
-    # One shared bar under the residual column; the two rows share a scale on purpose,
-    # so their error magnitudes can be compared by eye.
-    bar = figure.colorbar(drawn, ax=axes[:, 3], orientation="horizontal",
-                          fraction=0.055, pad=0.04, aspect=26,
+    figure.subplots_adjust(wspace=0.05, hspace=0.22)
+
+    # One shared bar under the residual column; both rows share a scale on purpose, so
+    # their error magnitudes compare by eye. It goes in its own axes rather than through
+    # colorbar(ax=...): that form steals height from the image column, and any later
+    # subplots_adjust silently undoes the shrink and drops the bar back onto the lower
+    # brain. Placed from the column's own position, so it stays aligned if the layout
+    # changes.
+    column = axes[1, 3].get_position()
+    bar_axes = figure.add_axes([column.x0 + 0.1 * column.width, column.y0 - 0.052,
+                                0.8 * column.width, 0.018])
+    bar = figure.colorbar(drawn, cax=bar_axes, orientation="horizontal",
                           ticks=[-RESIDUAL_LIMIT, 0, RESIDUAL_LIMIT])
     bar.ax.set_xticklabels([f"$-${RESIDUAL_LIMIT:g}", "0", f"$+${RESIDUAL_LIMIT:g}"],
                            fontsize=9)
     bar.outline.set_visible(False)
-    bar.ax.tick_params(length=2)
-
-    figure.subplots_adjust(wspace=0.05, hspace=0.22)
+    bar.ax.tick_params(length=2, pad=2)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     destination = args.out_dir / "slide_two_regimes.pdf"
     figure.savefig(destination)
