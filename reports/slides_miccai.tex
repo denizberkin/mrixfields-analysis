@@ -1,4 +1,6 @@
-% MICCAI 2026 -- MRIxFields Task 3, team inzva_mri. Five minutes, seven slides.
+% MICCAI 2026 -- MRIxFields Task 3, team inzva_mri. Five minutes, ten slides plus
+% one backup (the progression chart, after \appendix). Two slides are animated:
+% Ablations is 6 overlays, the error-split slide is 3.
 % Compile from inside reports/:  ~/anaconda3/envs/tex/bin/tectonic slides_miccai.tex
 %
 % Numbers: every SSIM/nRMSE is a *challenge* score off the Task 3 leaderboard
@@ -20,7 +22,8 @@
 \usepackage{booktabs}
 \usepackage{graphicx}
 \usepackage{tikz}
-\usetikzlibrary{positioning,arrows.meta}
+\usetikzlibrary{positioning,arrows.meta,fit}
+\usepackage{qrcode}
 
 \setbeamertemplate{navigation symbols}{}
 \setbeamertemplate{footline}[frame number]
@@ -136,10 +139,11 @@
   {\Large\bfseries MIM and Conditioning-based approaches\\ to enhance translation}\\[2mm]
   {\large Cross-field brain MRI translation, MRIxFields 2026 Task 3}\\[5mm]
 
-  {\small Berkin Deniz Kahya\textsuperscript{1,2} \quad
-          Racha Badreddine\textsuperscript{1,2} \quad
-          Furkan Y\"uceyal\c{c}\i n\textsuperscript{2} \quad
-          Ahmet Zelka\textsuperscript{2}}\\[2mm]
+  {\footnotesize \mbox{Berkin Deniz Kahya\textsuperscript{1,2}}\hspace{4mm}
+          \mbox{Racha Badreddine\textsuperscript{1,2}}\hspace{4mm}
+          \mbox{Furkan Y\"uceyal\c{c}\i n\textsuperscript{2}}\hspace{4mm}
+          \mbox{Ahmet Zelka\textsuperscript{2}}\hspace{4mm}
+          \mbox{\.Ilkay \"Oks\"uz\textsuperscript{1}}}\\[2mm]
   {\footnotesize\textcolor{muted}{%
     \textsuperscript{1}\.Istanbul Technical University, PIMI Lab \quad
     \textsuperscript{2}inzva}}\\[6mm]
@@ -152,7 +156,25 @@
 \end{frame}
 
 % ================================================================= 2. the task
+\begin{frame}{The task}
+  \centering
+  \includegraphics[width=0.95\textwidth]{figures/slide_task_fields.pdf}
+
+  \vspace{2mm}
+  {\large Given the scan at one field strength, predict the
+   \textbf{same subject at another}.}
+
+  \vspace{1mm}
+  \gloss{One subject, one slice. 5 fields $\times$ 3 contrasts
+   (T1W, T2W, T2FLAIR), all on the same grid.}
+\end{frame}
+
+% ================================================================== 3. baseline
 \begin{frame}{Baseline}
+  {\footnotesize Source and target share the anatomy, so copying the input already
+   scores: that is the floor to beat.}
+
+  \vspace{1mm}
   \begin{columns}[c,onlytextwidth]
   \begin{column}{0.46\textwidth}
     \centering
@@ -197,7 +219,7 @@
   \end{column}
 
   \begin{column}{0.5\textwidth}
-    \textbf{Submission: copy the input, $\hat y = x$.}
+    \textbf{Baseline: copy the input, $\hat y = x$.}
 
     \vspace{4mm}
     \centering
@@ -215,15 +237,20 @@
 
 % =========================================================== 3. spectral, why
 \begin{frame}{Power Spectrum Analysis}
+  {\footnotesize What changes with field is the fine detail: 0.1\,T carries almost none
+   of 7\,T's high frequency power, while 3\,T and 5\,T carry slightly more.}
+
+  \vspace{1mm}
   \centering
-  \includegraphics[width=0.90\textwidth]{spectral/fig_rapsd_by_field_retro.pdf}
+  \includegraphics[width=0.84\textwidth]{spectral/fig_rapsd_by_field_retro.pdf}
 
   \vspace{-1mm}
   \begin{columns}[t,onlytextwidth]
   \begin{column}{0.53\textwidth}
     \centering\scriptsize
     \setlength{\tabcolsep}{3.5pt}
-    fitted slope $\alpha$, \emph{minus} the 7\,T target's\par
+    $P(f)\propto f^{-\alpha}$,\quad
+    $\Delta\alpha=\alpha_{\text{source}}-\alpha_{7\,\mathrm{T}}$\par
     \vspace{0.6mm}
     \begin{tabular}{lcccc}
       \toprule
@@ -244,9 +271,9 @@
   \end{column}
   \end{columns}
 
-  \vspace{1.5mm}
-  {\scriptsize\textcolor{gray}{Radially averaged power spectral density,
-  $P(f)\propto f^{-\alpha}$, fitted on 0.02--0.2 cycles/pixel, 30 volumes per cell.}\par}
+  \vspace{1mm}
+  {\scriptsize\textcolor{gray}{Radially averaged power spectral density, fitted on
+  0.02--0.2 cycles/pixel, 30 volumes per cell.}\par}
 \end{frame}
 
 % ============================================================== 4. the method
@@ -256,11 +283,18 @@
 
   \pipestage{%
     \begin{tikzpicture}[x=1mm,y=1mm,font=\scriptsize]
-      \path (-7,13) rectangle (12,-14);
-      \foreach \k/\lab in {0/{$x$},1/t1,2/t2,3/fl}{
+      \path (-9,13) rectangle (13,-14);
+      % the slice we feed in, with the three co-registered contrasts stacked behind it,
+      % offset up-right so each card keeps its own top-right corner for its tag
+      % no per-card tags: the corners they would sit in are 1.4mm wide and the caption
+      % already says what the four channels are
+      \foreach \k in {3,2,1}{
         \draw[draw=base,fill=white,line width=0.5pt,rounded corners=0.6pt]
-          (0,{8.5-\k*4.6}) rectangle ++(10,3.4);
-        \node[text=muted,anchor=east,inner sep=1pt] at (-0.8,{10.2-\k*4.6}) {\lab};}
+          ({\k*1.4-7.6},{\k*1.4-8.5}) rectangle ++(15.2,17);}
+      \node[inner sep=0] at (0,0)
+        {\includegraphics[height=17mm]{figures/slide_method_input.pdf}};
+      \draw[draw=base,line width=0.5pt,rounded corners=0.6pt]
+        (-7.6,-8.5) rectangle ++(15.2,17);
     \end{tikzpicture}}%
     {one axial slice,\\4 co-registered channels\\[0.4mm]
      \textcolor{muted}{$(B,\,4,\,368,\,448)$}}%
@@ -274,16 +308,6 @@
       \draw[->,draw=cond,line width=0.5pt,>={Stealth[length=1mm]}] (z) -- (c);}}}%
     {32-channel conditional U-Net\\\textcolor{cond}{source, target, slice $z$}\\[0.4mm]
      \textcolor{muted}{$32\!\to\!512$, 4 levels}}%
-  \pipearrow
-  \pipestage{%
-    \begin{tikzpicture}[x=1mm,y=1mm,font=\scriptsize]
-      \path (-9,13) rectangle (13,-14);
-      \foreach \k in {5,4,3,2,1,0}{
-        \draw[draw=base,fill=white,line width=0.5pt,rounded corners=0.6pt]
-          ({-\k*1.5},{-\k*1.5-3}) rectangle ++(13,13);}
-    \end{tikzpicture}}%
-    {30 slices, stacked back\\into the submitted slab\\[0.4mm]
-     \textcolor{muted}{$(364,\,436,\,30)$}}%
   \pipearrow
   \pipestage{%
     \begin{tikzpicture}[x=1mm,y=1mm,font=\scriptsize]
@@ -302,38 +326,50 @@
       \node[text=accent,anchor=west,inner sep=1pt] at (13,-8.5) {$\times 4$};
     \end{tikzpicture}}%
     {\textcolor{accent}{mean of 3 checkpoints,\\mean of 4 flipped inputs}\\[0.4mm]
-     \textcolor{muted}{no training}}
+     \textcolor{muted}{no training}}%
+  \pipearrow
+  \pipestage{%
+    \begin{tikzpicture}[x=1mm,y=1mm,font=\scriptsize]
+      \path (-9,13) rectangle (13,-14);
+      % the predicted slice, with the rest of the 30-slice slab behind it
+      \foreach \k in {4,3,2,1}{
+        \draw[draw=base,fill=white,line width=0.5pt,rounded corners=0.6pt]
+          ({\k*1.4-7.6},{\k*1.4-8.5}) rectangle ++(15.2,17);}
+      \node[inner sep=0] at (0,0)
+        {\includegraphics[height=17mm]{figures/slide_method_output.pdf}};
+      \draw[draw=accent,line width=0.5pt,rounded corners=0.6pt]
+        (-7.6,-8.5) rectangle ++(15.2,17);
+    \end{tikzpicture}}%
+    {\textcolor{accent}{prediction at the target field},\\stacked into the submitted slab\\[0.4mm]
+     \textcolor{muted}{$(364,\,436,\,30)$}}
 
   \vspace{2mm}
-  \gloss{Last stage TTA only.}
-
-  \vspace{1.5mm}
   {\footnotesize
    $c = E_{\mathrm{src}}(d_s) + E_{\mathrm{tgt}}(d_t) + E_{z}(z) \in \mathbb{R}^{512}$
 \par}
 \end{frame}
 
 % ========================================= 5. what changed, panel by panel
-\begin{frame}{Architectural Changes}
+\begin{frame}{Ablations}
   \centering
   \vspace{1mm}
 
-  \unetpanel{}{vanilla U-Net}{0.869856}%
-  \archarrow{\rightarrow}{cond}{$+0.0278$}%
-  \unetpanel{\condtokens}{$+$ domain conditioning}{0.897646}%
-  \archarrow{\rightarrow}{accent}{$-0.0048$}%
-  \unetpanel{%
+  \onslide<1->{\unetpanel{}{vanilla U-Net}{0.869856}}%
+  \onslide<2->{\archarrow{\rightarrow}{cond}{$+0.0278$}}%
+  \onslide<2->{\unetpanel{\condtokens}{$+$ domain conditioning}{0.897646}}%
+  \onslide<3->{\archarrow{\rightarrow}{accent}{$-0.0048$}}%
+  \onslide<3->{\unetpanel{%
     \condtokens
     \foreach \i/\w in {0/9,1/7,2/5,3/3.5}{\node[blk,hot,minimum width=\w mm] at (d\i) {};}
     \node[draw=accent,fill=accentfill,line width=0.6pt,rounded corners=0.4pt,
           font=\scriptsize,text=accent,inner sep=1pt] at (19,-12) {$x+f(x)$};
-  }{$+$ FiLM \& residual}{0.892839}%
-  \archarrow{\downarrow}{cond}{$+0.0103$}
+  }{$+$ FiLM \& residual}{0.892839}}%
+  \onslide<4->{\archarrow{\downarrow}{cond}{$+0.0103$}}
 
   \vspace{2mm}
 
   {\showinfalse
-  \unetpanel{%
+  \onslide<4->{\unetpanel{%
     \condtokens
     \foreach \i/\w in {0/9,1/7,2/5,3/3.5}{
       \node[blk,hot,minimum width=\w mm] at (e\i) {};
@@ -345,117 +381,70 @@
     \foreach \r/\c in {0/1,1/0,1/2,2/1}{
       \fill[ink] ({-10.4+\c*1.6},{-2.4+\r*1.6}) rectangle ++(1.5,1.5);}
     \draw[->,draw=accent,line width=0.4pt,>={Stealth[length=1mm]}] (-5.7,0) -- (-4.7,0);
-  }{$+$ MIM pretraining}{0.903110}%
-  \archarrow{\rightarrow}{cond}{$+0.0037$}%
-  \unetpanel{%
+  }{$+$ MIM pretraining}{0.903110}}%
+  \onslide<5->{\archarrow{\rightarrow}{cond}{$+0.0037$}}%
+  \onslide<5->{\unetpanel{%
     \condtokens
     \node[blk,hot,minimum width=9mm] at (e0) {};
     \instack{\foreach \k/\lab in {0/{$x$},1/t1,2/t2,3/fl}{
       \node[font=\scriptsize,text=muted,inner sep=0.4pt,anchor=east] at (-10.1,{2.8-\k*2.6}) {\lab};}}
-  }{$+$ multi contrast input}{0.906773}%
-  \archarrow{\rightarrow}{cond}{$+0.0069$}%
-  \unetpanel{%
+  }{$+$ multi contrast input}{0.906773}}%
+  \onslide<6->{\archarrow{\rightarrow}{cond}{$+0.0069$}}%
+  \onslide<6->{\unetpanel{%
     \condtokens
     \foreach \i/\w in {0/9,1/7,2/5,3/3.5}{
       \node[blk,hot,minimum width=\w mm] at (e\i) {};
       \node[blk,hot,minimum width=\w mm] at (d\i) {};}
     \node[blk,hot,minimum width=3mm] at (b) {};
     \instack{}
-  }{$+$ average \& flip TTA}{\textcolor{accent}{\textbf{0.913652}}}%
+  }{$+$ average \& flip TTA}{\textcolor{accent}{\textbf{0.913652}}}}%
   \begin{minipage}[t]{0.06\textwidth}\hfill\end{minipage}\par}
 \end{frame}
 
-% ================================================= 7. the prediction held up
-\begin{frame}{Results}
-  \centering
-  \begin{tikzpicture}[x=1.24cm,y=58cm,font=\scriptsize]
-    % y is (challenge SSIM - 0.830); the whole frame spans 0.830 to 0.922.
-    \foreach \v/\lab in {0.010/0.84,0.030/0.86,0.050/0.88,0.070/0.90,0.090/0.92}{
-      \draw[draw=baseline,line width=0.6pt] (-0.4,\v) -- (9.4,\v);
-      \node[text=muted,anchor=east,inner sep=1.5pt] at (-0.45,\v) {\lab};}
-    \node[text=muted,rotate=90,anchor=south] at (-1.15,0.048) {challenge SSIM};
-
-    \draw[accent,dashed,line width=0.7pt] (-0.4,0.006497) -- (9.4,0.006497);
-    \node[text=accent,anchor=west,inner sep=2pt] at (1.3,0.0108)
-      {copy the input, no network: \textbf{0.8365}};
-
-    \draw[ink,line width=0.9pt]
-      (0,0.006497) -- (1,0.039856) -- (2,0.067646) -- (3,0.062839) --
-      (4,0.073110) -- (5,0.076773) -- (6,0.078873) -- (7,0.079433) -- (8,0.083652);
-    % only the two ends are marked out: the first is the no-network control, the last is
-    % the shipped model. Everything between is one series and gets one colour.
-    \foreach \x/\y in {1/0.039856, 2/0.067646, 3/0.062839, 4/0.073110,
-                       5/0.076773, 6/0.078873, 7/0.079433}{
-      \fill[cond] (\x,\y) circle (2.1pt);}
-    \fill[accent] (0,0.006497) circle (2.1pt);
-    \fill[accent] (8,0.083652) circle (2.1pt);
-
-    \node[text=ink,anchor=west,inner sep=2pt] at (1.2,0.0368) {vanilla U-Net};
-    \node[text=ink,anchor=south,align=center,inner sep=3pt] at (1.85,0.0702)
-      {\textbf{+ domain}\\\textbf{conditioning}\\$+0.0278$};
-    \node[text=ink,anchor=north,align=center,inner sep=2.5pt] at (3.15,0.0607)
-      {FiLM $+$ residual\\$-0.0048$};
-    \node[text=ink,anchor=south,align=center,inner sep=3pt] at (4.05,0.0792)
-      {\textbf{+ MIM pretraining}\\1{,}939 unpaired, $+0.0103$};
-    % a leader from each of the three dots down to one shared label, so it is obvious
-    % which points the bracket is describing
-    \foreach \x/\y in {5/0.076773, 6/0.078873, 7/0.079433}{
-      \draw[draw=muted,line width=0.4pt] (\x,{\y-0.0018}) -- (\x,0.0712);}
-    \draw[draw=muted,line width=0.4pt] (5,0.0712) -- (7,0.0712);
-    \node[text=ink,anchor=north,align=center,inner sep=3pt] at (6,0.0706)
-      {+ other contrasts, + SSIM loss, + axial token\\$+0.0064$ over three steps};
-    \node[text=accent,anchor=south,align=center,inner sep=3pt] at (7.4,0.0851)
-      {\textbf{+ checkpoint average \& flip TTA}\\\textbf{$+0.0042$, no training}};
-
-    % kept in plain ink rather than a second blue: a grey-blue is hard to tell from the
-    % series colour
-    \node[text=ink,anchor=west,inner sep=2pt,font=\scriptsize] at (5.35,0.0455)
-      {\textbf{tried on the same data, all worse:}};
-    \foreach \y/\lab/\val in {0.0375/{conditional flow matching}/0.8867,
-                              0.0295/{DINOv3 ViT}/0.8789,
-                              0.0215/{LeJEPA tubelet + UNETR}/0.8590,
-                              0.0135/{Swin UNETR 3D}/0.8582}{
-      \node[text=ink] at (5.5,\y) {$\times$};
-      \node[text=ink,anchor=west,font=\tiny,inner sep=2pt] at (5.62,\y) {\lab};
-      \node[text=ink,anchor=east,font=\tiny,inner sep=2pt] at (9.4,\y) {\val};}
-  \end{tikzpicture}
-\end{frame}
 
 % ============================================================ 7. qualitative
 \begin{frame}{The split is where the error goes}
-  \begin{columns}[c,onlytextwidth]
-  \begin{column}{0.52\textwidth}
-    \centering
-    \begin{tikzpicture}[x=1cm,y=1cm,font=\scriptsize]
-      \draw[draw=baseline,line width=0.8pt] (0,-0.3) -- (0,4.5);
-      \foreach \x in {10,20,30}{
-        \draw[draw=baseline,line width=0.6pt] (\x*0.16,-0.3) -- (\x*0.16,4.5);
-        \node[text=muted] at (\x*0.16,-0.55) {\x\%};}
-      % share of the total 1-SSIM error, as source (top bar) and as target (bottom bar)
-      \foreach \y/\lab/\s/\t/\op in {%
-        4.0/0.1\,T/26.5/23.6/1.0, 3.1/1.5\,T/19.5/21.3/0.55,
-        2.2/3\,T/16.0/21.0/0.55, 1.3/5\,T/17.2/19.0/0.55, 0.4/7\,T/20.8/15.1/0.55}{
-        \node[anchor=east,text=ink] at (-0.15,\y) {\lab};
-        \fill[cond,opacity=\op]   (0,\y+0.06) rectangle (\s*0.16,\y+0.28);
-        \fill[accent,opacity=\op] (0,\y-0.28) rectangle (\t*0.16,\y-0.06);}
-      \node[text=cond,anchor=west,font=\scriptsize] at (0,4.85) {as \textbf{source}};
-      \node[text=accent,anchor=west,font=\scriptsize] at (2.6,4.85) {as \textbf{target}};
-    \end{tikzpicture}
-  \end{column}
+  \centering
+  % chart and bullets live in one picture so the boxes and their connectors land on
+  % exact coordinates instead of guessed offsets between two columns
+  \begin{tikzpicture}[x=1cm,y=1cm,font=\scriptsize]
+    \draw[draw=baseline,line width=0.8pt] (0,-0.3) -- (0,4.5);
+    \foreach \x in {10,20,30}{
+      \draw[draw=baseline,line width=0.6pt] (\x*0.16,-0.3) -- (\x*0.16,4.5);
+      \node[text=muted] at (\x*0.16,-0.55) {\x\%};}
+    % share of the total 1-SSIM error, as source (top bar) and as target (bottom bar)
+    \foreach \y/\lab/\s/\t/\op in {%
+      4.0/0.1\,T/26.5/23.6/1.0, 3.1/1.5\,T/19.5/21.3/0.55,
+      2.2/3\,T/16.0/21.0/0.55, 1.3/5\,T/17.2/19.0/0.55, 0.4/7\,T/20.8/15.1/0.55}{
+      \node[anchor=east,text=ink] at (-0.15,\y) {\lab};
+      \fill[cond,opacity=\op]   (0,\y+0.06) rectangle (\s*0.16,\y+0.28);
+      \fill[accent,opacity=\op] (0,\y-0.28) rectangle (\t*0.16,\y-0.06);}
+    \node[text=cond,anchor=west,font=\scriptsize] at (0,4.85) {as \textbf{source}};
+    \node[text=accent,anchor=west,font=\scriptsize] at (2.6,4.85) {as \textbf{target}};
 
-  \begin{column}{0.44\textwidth}
-    \footnotesize
-    \begin{itemize}\setlength{\itemsep}{2.2mm}
-      \item 0.1\,T is \textbf{40\% of the transitions} and \hl{50\% of the error}.
-      \item \emph{Toward} high field is easier than away from it. 
-      \begin{itemize}\setlength{\itemsep}{2.2mm}
-        \item 7\,T the easiest target (0.9676)
-        \item 3\,T the easiest source (0.9656).
-      \end{itemize}
-      \item \textbf{Model is better at adding detail than removing it.}
-    \end{itemize}
-  \end{column}
-  \end{columns}
+    % step 1: the 0.1 T row, boxed and tied to its own bullet
+    \draw<1->[draw=ink,dashed,line width=0.6pt,rounded corners=2pt]
+      (-1.05,3.62) rectangle (4.52,4.40);
+    \draw<1->[->,draw=ink,line width=0.6pt,>={Stealth[length=1.6mm]}]
+      (4.52,4.01) -- (5.80,4.01);
+    \node<1->[anchor=west,text width=6.6cm,align=left,font=\footnotesize,text=ink]
+      at (5.95,4.01)
+      {0.1\,T is \textbf{40\% of the transitions} and \hl{50\% of the error}.};
+
+    % step 2: everything above 0.1 T, and the direction asymmetry
+    \draw<2->[draw=ink,dashed,line width=0.6pt,rounded corners=2pt]
+      (-1.05,0.02) rectangle (3.70,3.52);
+    \draw<2->[->,draw=ink,line width=0.6pt,>={Stealth[length=1.6mm]}]
+      (3.70,2.20) -- (5.80,2.20);
+    \node<2->[anchor=west,text width=6.6cm,align=left,font=\footnotesize,text=ink]
+      at (5.95,2.20)
+      {\emph{Toward} high field is easier than away from it: 7\,T the easiest
+       target (0.9676), 3\,T the easiest source (0.9656).};
+
+    \node<3->[anchor=west,text width=6.6cm,align=left,font=\footnotesize,text=ink]
+      at (5.95,0.55)
+      {\textbf{The model is better at adding detail than at removing it.}};
+  \end{tikzpicture}
 
   \srcline{Share of $\sum(1-\mathrm{SSIM})$ over 180 transitions, \texttt{multi contrast + ssim loss} model,
   scored locally. Each colour sums to 100\%.}
@@ -510,6 +499,78 @@
   \centering
   {\scriptsize\textcolor{muted}{Code, full architecture log and decision tree:
    \texttt{github.com/denizberkin/mrixfields-analysis}}}
+\end{frame}
+
+% =============================================================== 10. thank you
+\begin{frame}[plain]
+  \vfill
+  \centering
+  {\Large\bfseries Thank you}\\[2mm]
+  {\large Questions?}\\[6mm]
+
+  \qrcode[height=2.6cm]{https://github.com/denizberkin/mrixfields-analysis}\\[2.5mm]
+  {\footnotesize\texttt{github.com/denizberkin/mrixfields-analysis}}\\[5mm]
+
+  \logoslot{itu_logo_siyah}{\.ITU}{9mm}\hspace{14mm}%
+  \raisebox{1.7mm}{\logoslot{inzva_logo_dark}{inzva}{5.5mm}}
+  \vfill
+\end{frame}
+
+% ========================================== backup, shown only if it is asked for
+\appendix
+\begin{frame}{Results}
+  \centering
+  \begin{tikzpicture}[x=1.24cm,y=58cm,font=\scriptsize]
+    % y is (challenge SSIM - 0.830); the whole frame spans 0.830 to 0.922.
+    \foreach \v/\lab in {0.010/0.84,0.030/0.86,0.050/0.88,0.070/0.90,0.090/0.92}{
+      \draw[draw=baseline,line width=0.6pt] (-0.4,\v) -- (9.4,\v);
+      \node[text=muted,anchor=east,inner sep=1.5pt] at (-0.45,\v) {\lab};}
+    \node[text=muted,rotate=90,anchor=south] at (-1.15,0.048) {challenge SSIM};
+
+    \draw[accent,dashed,line width=0.7pt] (-0.4,0.006497) -- (9.4,0.006497);
+    \node[text=accent,anchor=west,inner sep=2pt] at (1.3,0.0108)
+      {copy the input, no network: \textbf{0.8365}};
+
+    \draw[ink,line width=0.9pt]
+      (0,0.006497) -- (1,0.039856) -- (2,0.067646) -- (3,0.062839) --
+      (4,0.073110) -- (5,0.076773) -- (6,0.078873) -- (7,0.079433) -- (8,0.083652);
+    % only the two ends are marked out: the first is the no-network control, the last is
+    % the shipped model. Everything between is one series and gets one colour.
+    \foreach \x/\y in {1/0.039856, 2/0.067646, 3/0.062839, 4/0.073110,
+                       5/0.076773, 6/0.078873, 7/0.079433}{
+      \fill[cond] (\x,\y) circle (2.1pt);}
+    \fill[accent] (0,0.006497) circle (2.1pt);
+    \fill[accent] (8,0.083652) circle (2.1pt);
+
+    \node[text=ink,anchor=west,inner sep=2pt] at (1.2,0.0368) {vanilla U-Net};
+    \node[text=ink,anchor=south,align=center,inner sep=3pt] at (1.85,0.0702)
+      {\textbf{+ domain}\\\textbf{conditioning}\\$+0.0278$};
+    \node[text=ink,anchor=north,align=center,inner sep=2.5pt] at (3.15,0.0607)
+      {FiLM $+$ residual\\$-0.0048$};
+    \node[text=ink,anchor=south,align=center,inner sep=3pt] at (4.05,0.0792)
+      {\textbf{+ MIM pretraining}\\1{,}939 unpaired, $+0.0103$};
+    % a leader from each of the three dots down to one shared label, so it is obvious
+    % which points the bracket is describing
+    \foreach \x/\y in {5/0.076773, 6/0.078873, 7/0.079433}{
+      \draw[draw=muted,line width=0.4pt] (\x,{\y-0.0018}) -- (\x,0.0712);}
+    \draw[draw=muted,line width=0.4pt] (5,0.0712) -- (7,0.0712);
+    \node[text=ink,anchor=north,align=center,inner sep=3pt] at (6,0.0706)
+      {+ other contrasts, + SSIM loss, + axial token\\$+0.0064$ over three steps};
+    \node[text=accent,anchor=south,align=center,inner sep=3pt] at (7.4,0.0851)
+      {\textbf{+ checkpoint average \& flip TTA}\\\textbf{$+0.0042$, no training}};
+
+    % kept in plain ink rather than a second blue: a grey-blue is hard to tell from the
+    % series colour
+    \node[text=ink,anchor=west,inner sep=2pt,font=\scriptsize] at (5.35,0.0455)
+      {\textbf{tried on the same data, all worse:}};
+    \foreach \y/\lab/\val in {0.0375/{conditional flow matching}/0.8867,
+                              0.0295/{DINOv3 ViT}/0.8789,
+                              0.0215/{LeJEPA tubelet + UNETR}/0.8590,
+                              0.0135/{Swin UNETR 3D}/0.8582}{
+      \node[text=ink] at (5.5,\y) {$\times$};
+      \node[text=ink,anchor=west,font=\tiny,inner sep=2pt] at (5.62,\y) {\lab};
+      \node[text=ink,anchor=east,font=\tiny,inner sep=2pt] at (9.4,\y) {\val};}
+  \end{tikzpicture}
 \end{frame}
 
 \end{document}
