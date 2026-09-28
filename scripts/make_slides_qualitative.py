@@ -98,6 +98,17 @@ def brain_bbox(images: list[np.ndarray], margin: int = 4, threshold: float = 0.0
             slice(max(columns[0] - margin, 0), min(columns[-1] + 1 + margin, mask.shape[1])))
 
 
+def save_panel(image: np.ndarray, destination: Path) -> None:
+    """One bare slice, no axes or padding, for the ends of the Method pipeline."""
+    figure = plt.figure(figsize=(1.6, 1.6))
+    axis = figure.add_axes([0, 0, 1, 1])
+    axis.imshow(np.rot90(image), cmap="gray", vmin=0.0, vmax=1.0,
+                interpolation="nearest")
+    axis.set_axis_off()
+    figure.savefig(destination, bbox_inches="tight", pad_inches=0)
+    plt.close(figure)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -170,8 +181,8 @@ def main() -> None:
     # here. Red means the model put intensity where the target has none, blue means it
     # left detail out, and the two regimes fail in visibly different ways.
     keys = ("source", "prediction", "target", "residual")
-    headings = ("source = copy baseline", "our model", "real 7\u2009T",
-                "our model $-$ real 7\u2009T")
+    headings = ("source", "our model", "7\u2009T GT",
+                "our model $-$ 7\u2009T GT")
     figure, axes = plt.subplots(len(rows), 4, figsize=(9.2, 2.55 * len(rows) + 0.7))
 
     for r, row in enumerate(rows):
@@ -222,6 +233,9 @@ def main() -> None:
     args.out_dir.mkdir(parents=True, exist_ok=True)
     destination = args.out_dir / "slide_two_regimes.pdf"
     figure.savefig(destination)
+
+    save_panel(rows[0]["source"], args.out_dir / "slide_method_input.pdf")
+    save_panel(rows[0]["prediction"], args.out_dir / "slide_method_output.pdf")
     plt.close(figure)
     print(f"wrote {destination}", flush=True)
 
