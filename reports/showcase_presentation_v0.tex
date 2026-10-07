@@ -45,11 +45,12 @@
   \leavevmode\hfill\usebeamerfont{footline}\usebeamercolor[fg]{footline}%
   \insertframenumber\,/\,\inserttotalframenumber\hspace*{12mm}\vskip1.6mm}
 
-% Small inzva logo, top right of every frame that does not reset the background.
+% Small inzva symbol (the circle, no wordmark), top right of every frame that does not reset
+% the background. Cropped from the wordmark in inzvalogo.pptx (kept local, gitignored).
 \setbeamertemplate{background}{%
   \begin{tikzpicture}[remember picture, overlay]
-    \node[anchor=north east, inner sep=0] at ([xshift=-4mm, yshift=-3.2mm]current page.north east)
-      {\IfFileExists{logos/inzva_logo_dark.png}{\includegraphics[height=3.2mm]{logos/inzva_logo_dark.png}}{}};
+    \node[anchor=north east, inner sep=0] at ([xshift=-4mm, yshift=-2.6mm]current page.north east)
+      {\IfFileExists{logos/inzva_symbol.png}{\includegraphics[height=4.5mm]{logos/inzva_symbol.png}}{}};
   \end{tikzpicture}}
 
 \definecolor{base}{HTML}{9FB3C8}
@@ -1017,6 +1018,8 @@
   {\large Questions?}\\[6mm]
   \qrcode[height=2.6cm]{https://github.com/denizberkin/mrixfields-analysis}\\[2.5mm]
   {\footnotesize\texttt{github.com/denizberkin/mrixfields-analysis}}\\[5mm]
+  {\footnotesize\textcolor{muted}{We thank G\"urkan Soykan for
+  mentoring this work, and inzva for the rest.}}\\[4mm]
   \logoslot{itu_logo_siyah}{\.ITU}{9mm}\hspace{14mm}%
   \raisebox{1.7mm}{\logoslot{inzva_logo_dark}{inzva}{5.5mm}}
   \vfill
