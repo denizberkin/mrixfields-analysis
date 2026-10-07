@@ -57,7 +57,8 @@ source domain, the target domain and the axial slice position, pretrained by mas
 modelling on the unpaired volumes, given all three contrasts of the source session, and trained
 with an SSIM term in the loss; its prediction averages three checkpoints and four flipped
 inputs. In the final test phase (20 unseen volunteers) it reached an SSIM of 0.9426, fourth
-of 25 teams on the challenge's main metric and sixth on the mean rank over SSIM, nRMSE and LPIPS,
+on the challenge's main metric among the 25 teams in that phase (40 entered Task 3) and sixth on the
+mean rank over SSIM, nRMSE and LPIPS,
 and received a 3rd Place Award. Ablations on the validation leaderboard attribute most of the
 gain over a plain U-Net (SSIM 0.8699 to 0.9137) to conditioning ($+0.0278$) and to pretraining on
 the unpaired data ($+0.0103$); five alternative backbones, including conditional flow
@@ -114,7 +115,8 @@ paired subjects. The input stacks all three contrasts of the source session next
 being translated; the loss adds an SSIM term to L1 and LPIPS; and the submitted prediction
 averages three consecutive checkpoints~\cite{izmailov2018swa} and four flipped inputs. On the
 validation leaderboard these steps raise SSIM from 0.8699 for a plain U-Net to 0.9137. In the
-final test phase the model scored an SSIM of 0.9426, fourth of 25 teams, was sixth on the mean
+final test phase the model scored an SSIM of 0.9426, fourth of the 25 teams in that phase (40
+entered Task 3), was sixth on the mean
 rank, and received a 3rd Place Award.
 
 Most of what else we tried did not help, and we report it with the same scoring. Swin

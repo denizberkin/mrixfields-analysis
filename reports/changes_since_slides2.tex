@@ -132,7 +132,7 @@
 \section{Summary}\label{sec:summary}
 
 \begin{itemize}
-  \item \textbf{Result.} 3rd Place Award, Task 3 (top 9 of 25 teams). Final test phase (20 unseen
+  \item \textbf{Result.} 3rd Place Award, Task 3 (top 9; 40 teams on the validation leaderboard, 25 in the final test). Final test phase (20 unseen
         volunteers, Docker submission): SSIM \textbf{0.942551, 4th} on the challenge's main
         metric; nRMSE 0.248030, 6th; LPIPS 0.050566, 14th; mean rank 8.00, 6th (tied). Presented
         at the MRIxFields 2026 workshop, MICCAI 2026, Strasbourg, 1 October 2026
@@ -166,7 +166,8 @@
 \begin{itemize}
   \item \textbf{Validation} (also ``challenge''): the leaderboard of the validation phase, 17
         volunteers, a 30-slice slab per volume, 180 files per submission (20 field pairs $\times$
-        3 contrasts $\times$ 3 cases). Every model in this report has one.
+        3 contrasts $\times$ 3 cases). Every model in this report has one. 40 teams (Synapse
+        submitter accounts) have accepted, complete Task 3 submissions on it, 2026-05-12 to 09-21.
   \item \textbf{Test}: the final phase, 20 unseen volunteers, full volumes through a Docker image,
         ranked on 1 October. Validation and test use different volunteers and protocols, so their
         numbers do not compare.
@@ -238,7 +239,7 @@ imispllove         & 0.93902 & 9  & 0.2530 & 9  & 0.0465 & 6  & 8.00 & 6 \\
 Tryer              & 0.93485 & 14 & 0.2558 & 10 & 0.0442 & 3  & 9.00 & 9 \\
 \bottomrule
 \end{tabular}
-\caption{Final test ranking of Task 3, the top 9 of 25 teams, ordered by SSIM. Final place is
+\caption{Final test ranking of Task 3, the top 9 of the 25 teams in the test (40 on the validation leaderboard), ordered by SSIM. Final place is
 the mean of the three metric ranks. Award tiers: 1st Watt; 2nd Blue Tent, Lzu\_LastDance,
 croissant; 3rd the other five.}
 \label{tab:final}
