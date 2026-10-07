@@ -1,28 +1,29 @@
-% Preprint draft: MRIxFields 2026 Task 3, team inzva mri. Springer LNCS format (MICCAI
-% workshops); arXiv-ready once the remaining sections are written.
+% Preprint draft: MRIxFields 2026 Task 3, team inzva mri. Two-column IEEEtran conference
+% layout for the arXiv preprint. The text is format-independent: for a MICCAI-venue submission
+% (workshops require Springer LNCS, single column) swap the class, the author block and the
+% bibliography style.
 %
-% Status (2026-10-08): title, abstract and introduction written. Sections 2-8 are a plan: each
-% lists its content and where the numbers come from (TODO.md sections, reports/*.pdf). The
-% grey \plan blocks are drafting aids; delete them as each section is written.
+% Status (2026-10-08): title, abstract and introduction written. The planned sections are kept
+% as comments after \end{document}, each with its content and where its numbers come from
+% (TODO.md sections, reports/*.pdf). Acknowledgements (to write with the rest): Gurkan Soykan
+% (inzva, Wageningen University) for mentoring this work, and inzva.
 %
 % Numbers: validation phase = challenge leaderboard (reports/architecture_report.tex); test
 % phase = Synapse "Final Ranking" (syn72060672, 1 Oct 2026); local analyses =
-% reports/error_spectrum_report.tex and TODO.md. Style: no em dashes.
+% reports/error_spectrum_report.tex and TODO.md, fixed harness only. Style: no em dashes.
 %
 % Compile from inside reports/preprint/:  ~/anaconda3/envs/tex/bin/tectonic preprint.tex
-\documentclass[runningheads]{llncs}
+\documentclass[conference]{IEEEtran}
 
 \usepackage[T1]{fontenc}
+\usepackage{cite}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
-\usepackage{xcolor}
 \usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=black]{hyperref}
 
-\definecolor{plan}{HTML}{627D98}
-% Drafting aid: what a section will contain, with its sources. Not part of the paper.
-\newcommand{\plan}[1]{{\small\color{plan}\noindent\textbf{Plan.}\ #1\par}}
+\begin{document}
 
 % Alternative titles:
 %   Cross-Field Brain MRI Translation: MIM and Conditioning-Based Approaches (the MICCAI talk)
@@ -30,48 +31,46 @@
 %   Translation
 \title{Information, Not Architecture: Conditioning and Masked Pretraining for Any-to-Any
 Cross-Field Brain MRI Translation}
-\titlerunning{Conditioning and Masked Pretraining for Cross-Field MRI Translation}
 
-\author{Berkin Deniz Kahya\inst{1,2} \and
-Racha Badreddine\inst{1,2} \and
-Furkan Y\"uceyal\c{c}\i n\inst{2} \and
-Ahmet Zelka\inst{2} \and
-\.Ilkay \"Oks\"uz\inst{1}}
-\authorrunning{B.\,D. Kahya et al.}
-% corresponding-author e-mail to add under the institutes
-\institute{\.Istanbul Technical University, PIMI Lab, \.Istanbul, T\"urkiye \and
-inzva, \.Istanbul, T\"urkiye}
+% corresponding-author e-mail to add
+\author{\IEEEauthorblockN{Berkin Deniz Kahya\IEEEauthorrefmark{1}\IEEEauthorrefmark{2},
+Racha Badreddine\IEEEauthorrefmark{1}\IEEEauthorrefmark{2},
+Furkan Y\"uceyal\c{c}\i n\IEEEauthorrefmark{2},
+Ahmet Zelka\IEEEauthorrefmark{2},
+\.Ilkay \"Oks\"uz\IEEEauthorrefmark{1}}
+\IEEEauthorblockA{\IEEEauthorrefmark{1}\.Istanbul Technical University, PIMI Lab,
+\.Istanbul, T\"urkiye}
+\IEEEauthorblockA{\IEEEauthorrefmark{2}inzva, \.Istanbul, T\"urkiye}}
 
-\begin{document}
-\sloppy
 \maketitle
 
 % ============================================================================ abstract
 \begin{abstract}
 Translating a brain MRI from one magnetic field strength to another would let low-field and
-high-field scanners share downstream tools. Task 3 of the MRIxFields 2026
-challenge asks for one model that maps any of five field strengths (0.1, 1.5, 3, 5 and 7\,T) to
-any other, for T1-weighted, T2-weighted and T2-FLAIR images, with three paired travelling
-volunteers and 1{,}939 unpaired volumes for training. We describe a 2D U-Net conditioned on the
-source domain, the target domain and the axial slice position, pretrained by masked image
-modelling on the unpaired volumes, given all three contrasts of the source session, and trained
-with an SSIM term in the loss; its prediction averages three checkpoints and four flipped
-inputs. In the final test phase (20 unseen volunteers) it reached an SSIM of 0.9426, fourth
-on the challenge's main metric among the 25 teams in that phase (40 entered Task 3) and sixth on the
-mean rank over SSIM, nRMSE and LPIPS,
-and received a 3rd Place Award. Ablations on the validation leaderboard attribute most of the
-gain over a plain U-Net (SSIM 0.8699 to 0.9137) to conditioning ($+0.0278$) and to pretraining on
-the unpaired data ($+0.0103$); five alternative backbones, including conditional flow
-matching, scored lower. A spectral analysis separates two regimes:
-0.1\,T inputs lack most of the fine detail of 7\,T, while T1W and T2W inputs at 3\,T and 5\,T are
-already as fine. The final model's output is too smooth at every frequency, yet the missing power is not
-coherent with the target, so post-hoc sharpening and a spectral-profile loss both fail to raise
-SSIM.
+high-field scanners share downstream tools. Task 3 of the MRIxFields 2026 challenge asks for one
+model that maps any of five field strengths (0.1, 1.5, 3, 5 and 7\,T) to any other, for
+T1-weighted, T2-weighted and T2-FLAIR images, with three paired travelling volunteers and
+1{,}939 unpaired volumes for training. We describe a 2D U-Net conditioned on the source domain,
+the target domain and the axial slice position, pretrained by masked image modelling on the
+unpaired volumes, given all three contrasts of the source session, and trained with an SSIM term
+in the loss; its prediction averages three checkpoints and four flipped inputs. In the final
+test phase (20 unseen volunteers) it reached an SSIM of 0.9426, fourth on the challenge's main
+metric among the 25 teams in that phase (40 entered Task 3) and sixth on the mean rank over
+SSIM, nRMSE and LPIPS, and received a 3rd Place Award. Ablations on the validation leaderboard
+attribute most of the gain over a plain U-Net (SSIM 0.8699 to 0.9137) to conditioning
+($+0.0278$) and to pretraining on the unpaired data ($+0.0103$); five alternative backbones,
+including conditional flow matching, scored lower. A spectral analysis separates two regimes:
+0.1\,T inputs lack most of the fine detail of 7\,T, while T1W and T2W inputs at 3\,T and 5\,T
+are already as fine. The final model's output is too smooth at every frequency, yet the missing
+power is not coherent with the target, so post-hoc sharpening and a spectral-profile loss both
+fail to raise SSIM.
 % Code: \url{https://github.com/denizberkin/mrixfields-analysis} (confirm it is public first)
-
-\keywords{Cross-field MRI translation \and Ultra-low-field MRI \and Masked image modelling
-\and Conditional U-Net \and Power spectrum}
 \end{abstract}
+
+\begin{IEEEkeywords}
+Cross-field MRI translation, ultra-low-field MRI, masked image modelling, conditional U-Net,
+power spectrum
+\end{IEEEkeywords}
 
 % ======================================================================== introduction
 \section{Introduction}
@@ -116,8 +115,7 @@ being translated; the loss adds an SSIM term to L1 and LPIPS; and the submitted 
 averages three consecutive checkpoints~\cite{izmailov2018swa} and four flipped inputs. On the
 validation leaderboard these steps raise SSIM from 0.8699 for a plain U-Net to 0.9137. In the
 final test phase the model scored an SSIM of 0.9426, fourth of the 25 teams in that phase (40
-entered Task 3), was sixth on the mean
-rank, and received a 3rd Place Award.
+entered Task 3), was sixth on the mean rank, and received a 3rd Place Award.
 
 Most of what else we tried did not help, and we report it with the same scoring. Swin
 UNETR~\cite{hatamizadeh2022swinunetr}, a frozen DINOv3 encoder~\cite{simeoni2025dinov3}, a
@@ -125,8 +123,8 @@ LeJEPA-pretrained tubelet encoder~\cite{balestriero2025lejepa}, a transformer th
 attention by frequency band, and a three-stage conditional flow-matching
 model~\cite{lipman2023flow} all scored below the conditional U-Net (0.858 to 0.887, against
 0.898). Through-plane context, a later checkpoint and a weight soup~\cite{wortsman2022soups}
-each moved validation SSIM by at most 0.001. A spectral analysis of the final model accounts for much of the
-remaining error: its output is too smooth at every frequency (72\% of the target's power at
+each moved validation SSIM by at most 0.001. A spectral analysis of the final model accounts
+for much of the remaining error: its output is too smooth at every frequency (72\% of the target's power at
 0.1--0.2 cycles/pixel), but the missing detail is not coherent with the target, so restoring the
 power, by post-hoc sharpening or by a spectral-profile loss, raises the error with it and does
 not raise SSIM.
@@ -134,81 +132,81 @@ not raise SSIM.
 Our contributions are:
 \begin{itemize}
   \item a field-conditioned U-Net with masked pretraining on unpaired volumes and multi-contrast
-        input, with every step of its development scored on the challenge leaderboard
-        (Sects.~\ref{sec:method} and~\ref{sec:results});
+        input, with every step of its development scored on the challenge leaderboard;
   \item a spectral reading of the task that separates a detail-generation regime (from 0.1\,T)
-        from a contrast-mapping regime (among 3, 5 and 7\,T) (Sect.~\ref{sec:analysis});
+        from a contrast-mapping regime (among 3, 5 and 7\,T);
   \item an error-spectrum and coherence analysis of the final model that explains why
-        sharpening and spectrum-matching objectives fail on it (Sect.~\ref{sec:spectrum});
+        sharpening and spectrum-matching objectives fail on it;
   \item negative results for five alternative backbones and formulations and for changes to
-        context, schedule, loss and averaging, each scored against its parent
-        (Sect.~\ref{sec:other}).
+        context, schedule, loss and averaging, each scored against its parent.
 \end{itemize}
 
-% ============================================================== planned sections (to write)
-\section{Challenge and Data}\label{sec:data}
-\plan{Task 3 definition; 5 fields $\times$ 3 contrasts; training split (3 paired volunteers,
-45 volumes; 1{,}939 unpaired volumes, 1{,}056 subjects), validation (17) and test (20)
-volunteers; submission format (20 pairs $\times$ 3 contrasts $\times$ subjects, 30-slice slab);
-metrics with formulas (nRMSE, SSIM 7$\times$7 uniform window, LPIPS AlexNet) and the
-mean-rank ranking. Copy-the-input baseline: 0.836497. Sources: deck slides 3--7,
-\texttt{reports/slides\_miccai.tex}. Figure: \texttt{figures/slide\_task\_fields.pdf}.}
-
-\section{Analysis Before Modelling}\label{sec:analysis}
-\plan{Spectral slopes per field and contrast ($\Delta\alpha$ table, 30 retrospective volumes per
-cell, fit band 0.02--0.2 cycles/pixel; \texttt{spectral/fig\_rapsd\_by\_field\_retro.pdf}).
-Error by field strength (0.1\,T: 40\% of transitions, 50\% of $\sum(1-\mathrm{SSIM})$; 7\,T the
-easiest target, 3\,T the easiest source; direction makes no difference; shipped model, fixed
-harness, Report III Table 7). Residual maps. Measurement: local scoring in-sample; the wrong-plane
-harness fixed 2026-09-11 [\S41], so pre-fix local numbers (seed and subject spread, 0.1\,T
-weighting) are void and need re-measuring before they can be cited.}
-
-\section{Method}\label{sec:method}
-\plan{32-channel 4-level 2D U-Net; joint (contrast, field) domain embeddings for source and
-target plus a sinusoidal slice-position token, summed at the bottleneck and applied by FiLM in
-every decoder block; zero-initialised residual head [\S9, \S39]. MIM pretraining of the whole
-network: 30{,}000 steps over 1{,}939 volumes [\S18, \S21]. 4-channel input: the image being
-translated plus T1W, T2W, T2FLAIR at the source field [\S23, \S25]. Loss
-$L_1 + 0.5\,(1-\mathrm{SSIM}) + 0.05\,\mathrm{LPIPS}$, SSIM matched to the scorer [\S28].
-Inference: mean of epochs 6--8 weights, 4 flips [\S40]; background zeroed by the source mask.
-Implementation details: optimiser, schedule, batch, hardware, training time (from the run
-configs and audit logs).}
-
-\section{Results}\label{sec:results}
-\plan{Validation ladder (table: vanilla 0.869856, + conditioning 0.897646, + FiLM \& residual
-0.892839, + MIM 0.903110, + 4 channels 0.906773, + SSIM loss 0.908873, + axial token 0.909433,
-+ averaging \& TTA 0.913652, with nRMSE and LPIPS). Final test ranking, top 9 ordered by SSIM:
-0.942551 (4th), nRMSE 0.248030 (6th), LPIPS 0.050566 (14th); mean rank 8.00, 6th tied. The
-SSIM/LPIPS trade-off of the last three steps (SSIM $+0.0069$, LPIPS $+0.0101$;
-\texttt{figures/showcase/trade\_*.pdf}). Qualitative 3$\times$5 grids up from 0.1\,T and down
-from 7\,T with residuals (\texttt{figures/showcase/grid\_*}).}
-
-\section{Error Spectrum of the Final Model}\label{sec:spectrum}
-\plan{Error power over target power by band and source field; cumulative error (47\% below 0.05
-cycles/pixel); direction does not separate the spectra; error on folds (35\% of squared error on
-18\% of pixels). Prediction/target power below 1 in every band; SSIM factor split (structure
-largest). Coherence identity $C = (P_{\hat y} + P_y - P_e)/2$. Post-hoc sharpening (17 settings,
-no gain) and the $\Delta\alpha$-gated spectral-profile loss (power 0.743 $\to$ 0.882, coherence
-0.833 $\to$ 0.822, SSIM $-0.00118$, 164/168 transitions lower). Source:
-\texttt{reports/error\_spectrum\_report.pdf}, [\S44].}
-
-\section{Other Routes}\label{sec:other}
-\plan{Backbones and formulations with validation SSIM: Swin UNETR 3D 0.858214, LeJEPA tubelet +
-UNETR 0.859000, DINOv3 ViT 0.878918, FPS-Former 0.879531, conditional flow matching 0.886725
-(\texttt{figures/showcase/other\_backbones.pdf}). Other changes against their parent run,
-validation SSIM or fixed-harness local (Report III Table 17, \texttt{other\_changes\_4.pdf}).
-Synthetic pairs from degraded 7\,T: never trained on; the reason they were dropped is a void
-pre-fix result. Workshop methods of the other top teams for context.}
-
-\section{Discussion and Conclusion}\label{sec:discussion}
-\plan{What the results say: information (which pair, unpaired data, other contrasts, the metric
-in the loss) bought the gains; architecture did not. Limitations: three paired subjects, all
-qualitative figures in-sample, local scoring coarser than the leaderboard, LPIPS traded for
-SSIM. Future work: fastMRI brain (6{,}970 volumes, 1.5 and 3\,T, raw multi-coil
-k-space~\cite{zbontar2018fastmri}): spectral slopes at scale, coherence per frequency for
-reconstruction, noise floors before model comparison.}
-
-\bibliographystyle{splncs04}
+\bibliographystyle{IEEEtran}
 \bibliography{references}
 
 \end{document}
+
+% ============================================================== PLAN (after \end{document},
+% not compiled). Move each block into the paper as its section is written.
+% % ============================================================== planned sections (to write)
+% \section{Challenge and Data}\label{sec:data}
+% \plan{Task 3 definition; 5 fields $\times$ 3 contrasts; training split (3 paired volunteers,
+% 45 volumes; 1{,}939 unpaired volumes, 1{,}056 subjects), validation (17) and test (20)
+% volunteers; submission format (20 pairs $\times$ 3 contrasts $\times$ subjects, 30-slice slab);
+% metrics with formulas (nRMSE, SSIM 7$\times$7 uniform window, LPIPS AlexNet) and the
+% mean-rank ranking. Copy-the-input baseline: 0.836497. Sources: deck slides 3--7,
+% \texttt{reports/slides\_miccai.tex}. Figure: \texttt{figures/slide\_task\_fields.pdf}.}
+%
+% \section{Analysis Before Modelling}\label{sec:analysis}
+% \plan{Spectral slopes per field and contrast ($\Delta\alpha$ table, 30 retrospective volumes per
+% cell, fit band 0.02--0.2 cycles/pixel; \texttt{spectral/fig\_rapsd\_by\_field\_retro.pdf}).
+% Error by field strength (0.1\,T: 40\% of transitions, 50\% of $\sum(1-\mathrm{SSIM})$; 7\,T the
+% easiest target, 3\,T the easiest source; direction makes no difference; shipped model, fixed
+% harness, Report III Table 7). Residual maps. Measurement: local scoring in-sample; the wrong-plane
+% harness fixed 2026-09-11 [\S41], so pre-fix local numbers (seed and subject spread, 0.1\,T
+% weighting) are void and need re-measuring before they can be cited.}
+%
+% \section{Method}\label{sec:method}
+% \plan{32-channel 4-level 2D U-Net; joint (contrast, field) domain embeddings for source and
+% target plus a sinusoidal slice-position token, summed at the bottleneck and applied by FiLM in
+% every decoder block; zero-initialised residual head [\S9, \S39]. MIM pretraining of the whole
+% network: 30{,}000 steps over 1{,}939 volumes [\S18, \S21]. 4-channel input: the image being
+% translated plus T1W, T2W, T2FLAIR at the source field [\S23, \S25]. Loss
+% $L_1 + 0.5\,(1-\mathrm{SSIM}) + 0.05\,\mathrm{LPIPS}$, SSIM matched to the scorer [\S28].
+% Inference: mean of epochs 6--8 weights, 4 flips [\S40]; background zeroed by the source mask.
+% Implementation details: optimiser, schedule, batch, hardware, training time (from the run
+% configs and audit logs).}
+%
+% \section{Results}\label{sec:results}
+% \plan{Validation ladder (table: vanilla 0.869856, + conditioning 0.897646, + FiLM \& residual
+% 0.892839, + MIM 0.903110, + 4 channels 0.906773, + SSIM loss 0.908873, + axial token 0.909433,
+% + averaging \& TTA 0.913652, with nRMSE and LPIPS). Final test ranking, top 9 ordered by SSIM:
+% 0.942551 (4th), nRMSE 0.248030 (6th), LPIPS 0.050566 (14th); mean rank 8.00, 6th tied. The
+% SSIM/LPIPS trade-off of the last three steps (SSIM $+0.0069$, LPIPS $+0.0101$;
+% \texttt{figures/showcase/trade\_*.pdf}). Qualitative 3$\times$5 grids up from 0.1\,T and down
+% from 7\,T with residuals (\texttt{figures/showcase/grid\_*}).}
+%
+% \section{Error Spectrum of the Final Model}\label{sec:spectrum}
+% \plan{Error power over target power by band and source field; cumulative error (47\% below 0.05
+% cycles/pixel); direction does not separate the spectra; error on folds (35\% of squared error on
+% 18\% of pixels). Prediction/target power below 1 in every band; SSIM factor split (structure
+% largest). Coherence identity $C = (P_{\hat y} + P_y - P_e)/2$. Post-hoc sharpening (17 settings,
+% no gain) and the $\Delta\alpha$-gated spectral-profile loss (power 0.743 $\to$ 0.882, coherence
+% 0.833 $\to$ 0.822, SSIM $-0.00118$, 164/168 transitions lower). Source:
+% \texttt{reports/error\_spectrum\_report.pdf}, [\S44].}
+%
+% \section{Other Routes}\label{sec:other}
+% \plan{Backbones and formulations with validation SSIM: Swin UNETR 3D 0.858214, LeJEPA tubelet +
+% UNETR 0.859000, DINOv3 ViT 0.878918, FPS-Former 0.879531, conditional flow matching 0.886725
+% (\texttt{figures/showcase/other\_backbones.pdf}). Other changes against their parent run,
+% validation SSIM or fixed-harness local (Report III Table 17, \texttt{other\_changes\_4.pdf}).
+% Synthetic pairs from degraded 7\,T: never trained on; the reason they were dropped is a void
+% pre-fix result. Workshop methods of the other top teams for context.}
+%
+% \section{Discussion and Conclusion}\label{sec:discussion}
+% \plan{What the results say: information (which pair, unpaired data, other contrasts, the metric
+% in the loss) bought the gains; architecture did not. Limitations: three paired subjects, all
+% qualitative figures in-sample, local scoring coarser than the leaderboard, LPIPS traded for
+% SSIM. Future work: fastMRI brain (6{,}970 volumes, 1.5 and 3\,T, raw multi-coil
+% k-space~\cite{zbontar2018fastmri}): spectral slopes at scale, coherence per frequency for
+% reconstruction, noise floors before model comparison.}
