@@ -60,13 +60,17 @@ FINAL = [
 OURS = ("inzva mri", 0.942551, 0.050566)
 THIRD = "Lzu_LastDance"  # 3rd on the final mean rank; its SSIM and LPIPS are drawn as lines
 
-# (label, validation SSIM): the dropped backbones and formulations, architecture_report 4.a-c, 3.f
+# (label, validation SSIM), ascending: the dropped backbones and formulations,
+# architecture_report 4.a, 4.b, 3.f and the teammates' rows. The tubelet row is furkanycy's
+# Tubelet-UNETR, StS-T-lj-un-v1 (lejepa_pretraining/repo/docs/conditional_tubelet_translator_
+# design.md), not the 0.859000 re-fine-tune (4.c), whose patch grid and slab seams (TODO.md 7)
+# came from that fine-tune rather than from the encoder.
 BACKBONES = [
     ("Swin UNETR, 3D", 0.858214),
-    ("LeJEPA tubelet encoder + UNETR", 0.859000),
     ("DINOv3 ViT encoder", 0.878918),
     ("FPS-Former", 0.879531),
     ("conditional flow matching, 3 stages", 0.886725),
+    ("LeJEPA tubelet encoder + UNETR", 0.889338),
 ]
 # (label, validation SSIM, colour): the U-Net line they are read against
 REFERENCES = [

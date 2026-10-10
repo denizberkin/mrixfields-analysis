@@ -4,11 +4,12 @@
 %
 % Conventions
 %  - One idea per build step: every multi-part slide reveals its parts with overlays.
-%  - \ph{TBD} on every frame, bottom right: the presenter's initial. Replace per slide.
+%  - \ph{X} on every main frame, bottom right: the presenter's initial (R, D, F, A). Backup
+%    frames carry none.
 %  - Small inzva logo top right of every content frame (background template); the title and
 %    closing frames carry the full logos instead.
 %  - Palette and U-Net glyph are reports/slides_miccai.tex's.
-%  - \placeholder marks an image still to be supplied (workshop photo, preprint page).
+%  - \placeholder marks an image still to be supplied.
 %
 % Numbers: validation-phase SSIM/nRMSE/LPIPS are challenge leaderboard scores (same table as
 % reports/architecture_report.tex). Final test-phase ranking: Synapse wiki "Final Ranking"
@@ -201,7 +202,7 @@
 % --------------------------------------------------------------------- 1. title
 {\setbeamertemplate{background}{}
 \begin{frame}[plain]
-  \ph{TBD}
+  \ph{R}
   \vfill
   \centering
   {\Large\bfseries Cross-Field Brain MRI Translation}\\[1.5mm]
@@ -226,12 +227,12 @@
 
 % ---------------------------------------------------------- 2. at MICCAI 2026
 \begin{frame}{MRIxFields 2026 at MICCAI}
-  \ph{TBD}
+  \ph{R}
   \begin{columns}[c,onlytextwidth]
   \begin{column}{0.55\textwidth}
     \centering
-    % workshop photo goes here: \includegraphics[width=\linewidth]{figures/showcase/workshop_photo.jpg}
-    \placeholder{7.6cm}{5.4cm}{workshop photo\\(to be added)}
+    % workshop_image.png is 1600 x 1200 px at 72 dpi; the trim drops the top 300 px of ceiling
+    \includegraphics[width=\linewidth, trim=0 0 0 300, clip]{figures/showcase/workshop_image.png}
   \end{column}
   \begin{column}{0.42\textwidth}
     \begin{itemize}\setlength{\itemsep}{4mm}
@@ -249,7 +250,7 @@
 % ============================================================================ I. PROBLEM
 % ------------------------------------------------------------------ 3. the data
 \begin{frame}{The task}
-  \ph{TBD}
+  \ph{R}
   \parttag{I \quad PROBLEM}
   \centering
   \includegraphics[height=0.62\textheight]{figures/slide_task_fields.pdf}
@@ -264,7 +265,7 @@
 
 % ----------------------------------------------------------------- 4. three tasks
 \begin{frame}{Tasks}
-  \ph{TBD}
+  \ph{R}
   \parttag{I \quad PROBLEM}
   \centering
   \vspace{2mm}
@@ -309,7 +310,7 @@
 
 % ------------------------------------------------------------------ 5. metrics
 \begin{frame}{Metrics}
-  \ph{TBD}
+  \ph{R/D}
   \parttag{I \quad PROBLEM}
   \centering
   \only<1>{\metricnav{1}}\only<2-5>{\metricnav{2}}\only<6-8>{\metricnav{3}}
@@ -386,7 +387,7 @@
 
 % ------------------------------------------------------------------ 6. data
 \begin{frame}{Data}
-  \ph{TBD}
+  \ph{R}
   \parttag{I \quad PROBLEM}
   \centering
   \vspace{4mm}
@@ -412,7 +413,7 @@
 
 % ------------------------------------------------------------------ 7. baseline
 \begin{frame}{Baseline: copy the input}
-  \ph{TBD}
+  \ph{R}
   \parttag{I \quad PROBLEM}
   {\footnotesize Source and target share the anatomy, so copying the input already scores.}
 
@@ -452,7 +453,7 @@
     \centering
     \begin{tabular}{lcc}
       \toprule
-      & SSIM & nRMSE \\
+      metric & SSIM & nRMSE \\
       \midrule
       \onslide<2->{$\hat y = x$ (copy)} & \onslide<2->{0.836497} & \onslide<2->{0.5216} \\
       \onslide<3->{our final model} & \onslide<3->{\textbf{0.913652}} & \onslide<3->{0.2380} \\
@@ -468,7 +469,7 @@
 % =================================================================== II. ANALYSES
 % ------------------------------------------------------------ 8. spectral slopes
 \begin{frame}{Power spectrum analysis}
-  \ph{TBD}
+  \ph{D}
   \parttag{II \quad ANALYSES}
   \centering
   \includegraphics[width=0.80\textwidth]{spectral/fig_rapsd_by_field_retro.pdf}
@@ -508,7 +509,7 @@
 
 % --------------------------------------------------------------- 9. error split
 \begin{frame}{Error by field strength}
-  \ph{TBD}
+  \ph{D}
   \parttag{II \quad ANALYSES}
   \centering
   \begin{tikzpicture}[x=1cm,y=1cm,font=\scriptsize]
@@ -549,7 +550,7 @@
 
 % ------------------------------------------------------------- 10. two regimes
 \begin{frame}{Residual maps}
-  \ph{TBD}
+  \ph{D}
   \parttag{II \quad ANALYSES}
   \centering
   \maskedfigure{0.60\textwidth}{figures/slide_two_regimes.pdf}{%
@@ -561,41 +562,10 @@
   \gloss{Blue: too dark; red: too bright. Subject 0006, T1W.}
 \end{frame}
 
-% ------------------------------------------------------- 11. measurement limits
-\begin{frame}{Measurement limits}
-  \ph{TBD}
-  \parttag{II \quad ANALYSES}
-  \centering
-  \vspace{1mm}
-  {\small\renewcommand{\arraystretch}{1.35}
-  \begin{tabular}{lr}
-    \toprule
-    Measurement & Result \\
-    \midrule
-    \onslide<1->{TTA and checkpoint averaging, local scoring}
-      & \onslide<1->{$+0.0008$, $+0.0009$: declined} \\
-    \onslide<2->{The same two, on the leaderboard} & \onslide<2->{$+0.0042$ together} \\
-    \onslide<3->{Checkpoint picked by every local check, on the leaderboard}
-      & \onslide<3->{$-0.00023$} \\
-    \onslide<4->{Two models, fixed local scoring vs.\ the leaderboard}
-      & \onslide<4->{opposite order} \\
-    \bottomrule
-  \end{tabular}}
-
-  \vspace{3mm}
-  \raggedright
-  \begin{itemize}\setlength{\itemsep}{2mm}
-    \item<5-> The first three: until 11 September, local scoring fed the model sagittal slices
-          instead of axial ones.
-    \item<6-> After the fix, local scores are still in-sample (all three paired subjects are in
-          training), so models were chosen on the leaderboard.
-  \end{itemize}
-\end{frame}
-
 % ================================================================== III. METHOD
-% ---------------------------------------------------------------- 12. the model
+% ---------------------------------------------------------------- 11. the model
 \begin{frame}{Method}
-  \ph{TBD}
+  \ph{D}
   \parttag{III \quad METHOD}
   \centering
   \vspace{2mm}
@@ -660,9 +630,9 @@
    loss $L_1 + 0.5\,(1-\mathrm{SSIM}) + 0.05\,\mathrm{LPIPS}$\par}}
 \end{frame}
 
-% ------------------------------------------------------------ 13. the ladder
+% ------------------------------------------------------------ 12. the ladder
 \begin{frame}{Ablations}
-  \ph{TBD}
+  \ph{D}
   \parttag{III \quad METHOD}
   \centering
   \onslide<1->{\unetpanel{}{vanilla U-Net}{0.869856}}%
@@ -712,9 +682,9 @@
   \begin{minipage}[t]{0.06\textwidth}\hfill\end{minipage}\par}
 \end{frame}
 
-% ------------------------------------------------- 14. qualitative, to a higher field
-\begin{frame}{Predictions to a higher field}
-  \ph{TBD}
+% ------------------------------------------------- 13. qualitative, to a higher field
+\begin{frame}{Qualitative results, to a higher field}
+  \ph{D}
   \parttag{III \quad METHOD}
   \centering
   \only<1>{\includegraphics[height=0.76\textheight]{figures/showcase/grid_up_1.pdf}}%
@@ -727,9 +697,9 @@
   \only<4>{\gloss{Prediction minus target; blue too dark, red too bright. Subject 0006, in-sample.}}
 \end{frame}
 
-% --------------------------------------------------- 15. qualitative, to a lower field
-\begin{frame}{Predictions to a lower field}
-  \ph{TBD}
+% --------------------------------------------------- 14. qualitative, to a lower field
+\begin{frame}{Qualitative results, to a lower field}
+  \ph{D}
   \parttag{III \quad METHOD}
   \centering
   \only<1>{\includegraphics[height=0.76\textheight]{figures/showcase/grid_down_1.pdf}}%
@@ -743,9 +713,9 @@
 \end{frame}
 
 % ====================================================== IV. ERROR SPECTRUM
-% -------------------------------------------------- 16. error spectrum
+% -------------------------------------------------- 15. error spectrum
 \begin{frame}{Error spectrum of the final model}
-  \ph{TBD}
+  \ph{D}
   \parttag{IV \quad ERROR SPECTRUM}
   \centering
   \only<1-3>{\maskedfigure{0.96\textwidth}{spectral/fig_error_rapsd_by_field.pdf}{%
@@ -764,9 +734,9 @@
   $1-\mathrm{SSIM}$ on folds: 1.14$\times$ their pixel share.}}
 \end{frame}
 
-% --------------------------------------------- 17. smoothness
+% --------------------------------------------- 16. smoothness
 \begin{frame}{Prediction smoothness}
-  \ph{TBD}
+  \ph{D}
   \parttag{IV \quad ERROR SPECTRUM}
   \centering
   \maskedfigure{0.96\textwidth}{spectral/fig_error_smoothness.pdf}{%
@@ -779,32 +749,40 @@
   \only<2>{\gloss{\textbf{b.} Too smooth for every target field up to 0.2 cycles/pixel; above
   that, 0.1\,T targets are noise.}}%
   \only<3>{\gloss{\textbf{c.} SSIM loses most on structure (0.076 on folds, 0.073 in the flat
-  interior), then contrast; luminance only at the outer edge.}}%
-  \only<4>{\gloss{Post-hoc sharpening, 17 settings: selection on held-out subjects picks no
-  sharpening; the best setting per transition gains +0.00004.}}
+  interior), then contrast; luminance only at the outer edge.}}
 \end{frame}
 
-% --------------------------------------------- 18. spectral-profile loss
+% --------------------------------------------- 17. spectral-profile loss
 \begin{frame}{Spectral-profile loss}
-  \ph{TBD}
+  \ph{D}
   \parttag{IV \quad ERROR SPECTRUM}
   \centering
-  \maskedfigure{0.96\textwidth}{spectral/fig_spectral_loss.pdf}{%
-    \fill<1>[dim] (0.333,0) rectangle (1.01,1.01);
-    \fill<1-2>[dim] (0.667,0) rectangle (1.01,1.01);}
+  % the gate is alpha_t - alpha_s (target smoother than source); slide 8's Delta alpha is
+  % alpha_source - alpha_7T, a different quantity, so the gate is written out here
+  {\small $\displaystyle \mathcal{L} = \mathcal{L}_{\text{shipped}}
+    + \lambda\,\max(0,\,\alpha_t-\alpha_s)\,\frac{1}{18}\sum_{r=1}^{18}
+      \bigl|\log P_{\hat y}(r) - \log P_{y}(r)\bigr|,
+    \qquad \lambda = 0.025$}\par
+  \vspace{2mm}
+  \maskedfigure{0.90\textwidth}{spectral/fig_spectral_loss.pdf}{%
+    \fill<1>[dim] (0,0) rectangle (1.01,1.01);
+    \fill<1-2>[dim] (0.333,0) rectangle (1.01,1.01);
+    \fill<1-3>[dim] (0.667,0) rectangle (1.01,1.01);}
 
   \vspace{2mm}
-  \only<1>{\gloss{\textbf{a.} $\Delta\alpha$-gated spectral-profile loss, one fine-tune: power at
-  0.1--0.2 cycles/pixel rises from 0.743 to 0.882 of the target's.}}%
-  \only<2>{\gloss{\textbf{b.} Coherence with the target is unchanged: 0.833 $\to$ 0.822.}}%
-  \only<3>{\gloss{\textbf{c.} So the error power rises with it, 0.307 $\to$ 0.339 of the
+  \only<1>{\gloss{Added to the shipped loss, only where the target is smoother than the source.
+  $P(r)$: power in ring $r$, 0.01 cycles/pixel wide, over 0.02--0.20.}}%
+  \only<2>{\gloss{\textbf{a.} One fine-tune: power at 0.1--0.2 cycles/pixel rises from 0.743 to
+  0.882 of the target's.}}%
+  \only<3>{\gloss{\textbf{b.} Coherence with the target is unchanged: 0.833 $\to$ 0.822.}}%
+  \only<4>{\gloss{\textbf{c.} So the error power rises with it, 0.307 $\to$ 0.339 of the
   target's. SSIM $-0.00118$; 164 of 168 transitions lower.}}
 \end{frame}
 
 % ============================================================ V. OTHER METHODS
-% ------------------------------------------------------------ 19. other backbones
+% ------------------------------------------------------------ 18. other backbones
 \begin{frame}{Other backbones}
-  \ph{TBD}
+  \ph{F}
   \parttag{V \quad OTHER METHODS}
   \centering
   \vspace{2mm}
@@ -814,9 +792,108 @@
   \gloss{Validation-phase challenge SSIM. All five score below the conditional U-Net.}
 \end{frame}
 
+% ------------------------------------------------------------ 19. tubelet ViT, LeJEPA
+% Encoder numbers: lejepa_pretraining/artifacts/monitor_step_00040000.json (step 40,000 vs
+% step 0, view 0); design: reports/tubelet_vit_lejepa_report.tex; downstream: furkanycy's
+% Tubelet-UNETR, submission StS-T-lj-un-v1, same step-40,000 encoder
+% (lejepa_pretraining/repo/docs/conditional_tubelet_translator_design.md).
+% Bars share one scale, 0.02 cm per unit of effective rank.
+\begin{frame}{Tubelet ViT with LeJEPA pretraining}
+  \ph{F}
+  \parttag{V \quad OTHER METHODS}
+  \centering
+  \vspace{1mm}
+  \begin{tikzpicture}[font=\scriptsize, >={Stealth[length=1.3mm]},
+    arr/.style={->, draw=muted, line width=0.5pt},
+    tok/.style={minimum width=2.6mm, minimum height=2.6mm, inner sep=0, line width=0.5pt},
+    head/.style={anchor=base west, font=\footnotesize\bfseries},
+    sub/.style={anchor=base west, text=muted},
+    row/.style={anchor=east, text=muted},
+    val/.style={anchor=west, text=ink}]
+    % 16-slice slab, front slice on top
+    \foreach \k in {6,...,1}{
+      \draw[draw=base, fill=white, line width=0.4pt] ({\k*0.08},{\k*0.08}) rectangle ++(1.45,1.6);}
+    \node[inner sep=0, anchor=south west] at (0,0)
+      {\includegraphics[width=1.45cm, height=1.6cm]{figures/showcase/lpips_target.png}};
+    \draw[draw=base, line width=0.4pt] (0,0) rectangle (1.45,1.6);
+    \node[text=ink] at (0.97,-0.32) {16-slice slab};
+    \node[text=muted] at (0.97,-0.66) {2 global + 6 local views};
+    \draw[arr] (2.05,0.85) -- (2.55,0.85);
+    % tubelet grid: a box cut into 2 x 16 x 16 cells
+    \begin{scope}[shift={(2.75,0.15)}]
+      \fill[baseline!60] (0,0) rectangle (1.4,1.4);
+      \fill[fill=baseline] (0,1.4) -- (0.35,1.75) -- (1.75,1.75) -- (1.4,1.4) -- cycle;
+      \fill[baseline!80!base] (1.4,0) -- (1.75,0.35) -- (1.75,1.75) -- (1.4,1.4) -- cycle;
+      \foreach \t in {0.35,0.7,1.05}{
+        \draw[draw=base, line width=0.3pt] (\t,0) -- (\t,1.4) -- ({\t+0.35},1.75);
+        \draw[draw=base, line width=0.3pt] (0,\t) -- (1.4,\t) -- (1.75,{\t+0.35});}
+      \draw[draw=base, line width=0.5pt] (0,0) rectangle (1.4,1.4);
+      \draw[draw=base, line width=0.5pt] (0,1.4) -- (0.35,1.75) -- (1.75,1.75) -- (1.75,0.35) -- (1.4,0);
+      \draw[draw=base, line width=0.5pt] (1.4,1.4) -- (1.75,1.75);
+    \end{scope}
+    \node[text=ink] at (3.62,-0.32) {tubelets, $2\times16\times16$};
+    \node[text=muted] at (3.62,-0.66) {1{,}568 tokens};
+    \draw[arr] (4.7,0.85) -- (5.2,0.85);
+    % encoder
+    \node[draw=base, fill=baseline!60, rounded corners=2pt, line width=0.5pt,
+          minimum width=1.6cm, minimum height=1.9cm, align=center, text=ink]
+      (vit) at (6.0,0.85) {\small\bfseries ViT-B\\[0.5mm]\scriptsize 12 blocks\\86.7\,M};
+    \node[text=muted] at (6.0,-0.66) {from scratch};
+    % CLS path: what the loss trains
+    \node[tok, draw=cond, fill=cond!25] (cls) at (7.55,1.55) {};
+    \node[text=cond, anchor=north, inner sep=1.5pt] at (cls.south) {CLS};
+    \draw[arr] (vit.east |- cls) -- (cls);
+    \node[draw=cond, rounded corners=2pt, line width=0.5pt, align=center, text=ink,
+          inner sep=2pt, anchor=west] (loss) at (9.5,1.55)
+      {LeJEPA loss\\[0.3mm]\textcolor{muted}{view invariance + SIGReg}};
+    \draw[arr, draw=cond] (cls) -- node[above, text=muted, inner sep=1.5pt] {MLP, 128-d} (loss);
+    % dense path: what the translator reads
+    \foreach \i in {0,...,5}{
+      \node[tok, draw=accent, fill=accentfill] (d\i) at ({7.2+\i*0.27},0.15) {};}
+    \node[text=accent, anchor=north] at (7.88,-0.06) {dense tokens};
+    \draw[arr] (vit.east |- d0) -- (d0);
+    \node[draw=accent, rounded corners=2pt, line width=0.5pt, align=center, text=ink,
+          inner sep=2pt, anchor=west] (dec) at (9.5,0.15)
+      {translator\\[0.3mm]\textcolor{muted}{conditional UNETR decoder}};
+    \draw[arr, draw=accent] (d5) -- (dec);
+    % effective rank: random initialisation vs step 40,000
+    \onslide<2->{
+      \node[head, text=cond] (h1) at (0,-1.4) {CLS token};
+      \node[sub] at ([xshift=1.5mm]h1.base east) {trained by the loss};
+      \node[row] at (1.6,-1.8) {random init};
+      \fill[black!18] (1.7,-1.92) rectangle ++({29.70*0.02},0.24);
+      \node[val] at ({1.72+29.70*0.02},-1.8) {29.7};
+      \node[row] at (1.6,-2.2) {40{,}000 steps};
+      \fill[cond] (1.7,-2.32) rectangle ++({95.70*0.02},0.24);
+      \node[val] at ({1.72+95.70*0.02},-2.2) {\textbf{95.7}};
+      \node[sub, anchor=west] at (0,-2.7) {view retrieval, top-1: 0.26--0.53 $\to$ 0.88--0.98};}
+    \onslide<3->{
+      \node[head, text=accent] (h2) at (6.9,-1.4) {dense tokens};
+      \node[sub] at ([xshift=1.5mm]h2.base east) {read by the translator};
+      \node[row] at (8.5,-1.8) {random init};
+      \fill[black!18] (8.6,-1.92) rectangle ++({185.04*0.02},0.24);
+      \node[val] at ({8.62+185.04*0.02},-1.8) {185.0};
+      \node[row] at (8.5,-2.2) {40{,}000 steps};
+      \fill[accent] (8.6,-2.32) rectangle ++({115.06*0.02},0.24);
+      \node[val] at ({8.62+115.06*0.02},-2.2) {\textbf{115.1}};
+      \node[sub, anchor=west] at (6.9,-2.7) {cosine, right vs wrong location: 0.973 vs 0.956};}
+    \onslide<2->{\node[text=muted, anchor=east, font=\tiny] at (13.0,-3.05)
+      {bars: effective rank};}
+  \end{tikzpicture}
+
+  \vspace{1mm}
+  \only<1>{\gloss{Self-supervised on the 1{,}939 unpaired volumes. Only the CLS token enters the
+  loss; the translator reads the dense tokens.}}%
+  \only<2>{\gloss{The loss improves the CLS token well beyond random initialisation.}}%
+  \only<3>{\gloss{The dense tokens end up below random initialisation: right and wrong locations
+  look alike.}}%
+  \only<4>{\gloss{Encoder fine-tuned with the conditional UNETR decoder, 2 epochs: validation
+  SSIM 0.8893, LPIPS 0.0889.}}
+\end{frame}
+
 % ------------------------------------------------------------ 20. other changes
 \begin{frame}{Other changes}
-  \ph{TBD}
+  \ph{A}
   \parttag{V \quad OTHER METHODS}
   \centering
   \only<1>{\includegraphics[width=0.84\textwidth]{figures/showcase/other_changes_1.pdf}}%
@@ -831,13 +908,13 @@
   lower.}}%
   \only<3>{\gloss{Input context: 2.5D alone $+0.0005$; the axial token on top of it $-0.0010$.}}%
   \only<4>{\gloss{Ensembling: a 50/50 soup with a sibling run, $-0.0004$.}}
-  \srcline{Change against the parent run. Local: fixed harness, in-sample. Full tree:
-  \texttt{reports/decision\_tree.pdf}.}
+  \vfill
+  \gloss{Only the SSIM change was checked for these; LPIPS was not compared.}
 \end{frame}
 
 % -------------------------------------------------- 21. other routes
 \begin{frame}{Other routes}
-  \ph{TBD}
+  \ph{A}
   \parttag{V \quad OTHER METHODS}
   \centering
   \vspace{4mm}
@@ -848,7 +925,7 @@
     \midrule
     \onslide<1->{Unpaired data, 1{,}939 volumes} & \onslide<1->{masked image modelling, whole U-Net}
       & \onslide<1->{kept: $+0.0103$ SSIM} \\[1mm]
-    & \onslide<2->{tubelet ViT encoder, LeJEPA} & \onslide<2->{dropped: 0.8590 SSIM} \\[1mm]
+    & \onslide<2->{tubelet ViT encoder, LeJEPA} & \onslide<2->{dropped: 0.8893 SSIM} \\[1mm]
     \onslide<3->{Paired data, 3 volunteers} & \onslide<3->{synthetic pairs from degraded 7\,T}
       & \onslide<3->{dropped before training: the 0.1\,T error is information-limited} \\[1mm]
     \onslide<4->{Frequency bands} & \onslide<4->{FPS-Former, band split in attention}
@@ -860,7 +937,7 @@
 % =========================================================== VI. RESULTS
 % ------------------------------------------------------------ 22. final ranking
 \begin{frame}{Final test ranking, Task 3}
-  \ph{TBD}
+  \ph{D}
   \parttag{VI \quad RESULTS}
   \centering
   \vspace{1mm}
@@ -869,15 +946,14 @@
   \only<3>{\finaltable{\rowcolor{baseline!70}}{\textbf}}
 
   \vspace{3mm}
-  \only<1>{\gloss{Test phase: 20 volunteers, Docker submission. Top 9, ordered by SSIM. 40 teams
-  on the validation leaderboard, 25 in the test.}}%
+  \only<1>{\gloss{Top 9 teams in Task 3, test phase.}}%
   \only<2>{\gloss{Mean rank: 6th, tied.}}%
   \only<3>{\gloss{SSIM is the main metric; we are 4th on it.}}
 \end{frame}
 
 % ------------------------------------------------------------ 23. trade-off
 \begin{frame}{The trade-off}
-  \ph{TBD}
+  \ph{D}
   \parttag{VI \quad RESULTS}
   \begin{columns}[t,onlytextwidth]
   \begin{column}{0.49\textwidth}
@@ -903,7 +979,7 @@
 
 % ---------------------------------------------------------------- 24. award
 \begin{frame}{3rd Place Award, Task 3}
-  \ph{TBD}
+  \ph{D}
   \parttag{VI \quad RESULTS}
   \centering
   \vspace{1mm}
@@ -915,20 +991,43 @@
   \gloss{MRIxFields 2026, MICCAI 2026, Strasbourg, 1 October 2026.}
 \end{frame}
 
-% ---------------------------------------------------------------- 25. preprint
-\begin{frame}{Preprint}
+% ---------------------------------------------------------------- 25. MIDL 2027
+% Dates: https://2027.midl.io/important-dates (23:59 AoE).
+% Photo: the MIDL 2027 site's key image (https://2027.midl.io/images/keyimage.jpeg), rows
+% 36--72% of its height, resized to 1800 px wide: figures/showcase/midl2027_porto.jpg.
+% Timeline milestones are evenly spaced, not to scale.
+\begin{frame}{MIDL 2027}
   \ph{TBD}
   \parttag{VI \quad RESULTS}
   \centering
   \vspace{1mm}
-  % first page of the preprint goes here:
-  % \includegraphics[height=0.80\textheight]{figures/showcase/preprint_page1.pdf}
-  \placeholder{5.2cm}{6.6cm}{first page of the preprint\\(draft in preparation)}
+  \includegraphics[width=\textwidth]{figures/showcase/midl2027_porto.jpg}\par
+  \vspace{0.6mm}
+  {\scriptsize\textcolor{muted}{Medical Imaging with Deep Learning, Porto, 14--16 July 2027.
+  Image: 2027.midl.io.}\par}
+  \vspace{3mm}
+  {\small We hope to submit the full paper: the power spectrum analysis, and MIM pretraining
+  with conditioning.\par}
+  \vspace{4mm}
+  \onslide<2->{%
+  \begin{tikzpicture}[font=\scriptsize, x=2.25cm]
+    \draw[draw=baseline, line width=1.2pt] (-0.2,0) -- (5.2,0);
+    \foreach \i/\date/\event/\col in {%
+        0/{30 Nov 2026}/{abstract registration}/accent,
+        1/{4 Dec 2026}/{full paper}/accent,
+        2/{10 Jan 2027}/{reviews}/muted,
+        3/{18--24 Jan 2027}/{rebuttal}/muted,
+        4/{12 Feb 2027}/{decision}/muted,
+        5/{14--16 Jul 2027}/{conference, Porto}/ink}{
+      \fill[\col] (\i,0) circle (2.2pt);
+      \node[anchor=south, text=\col, font=\scriptsize\bfseries, inner sep=4pt] at (\i,0) {\date};
+      \node[anchor=north, text=ink, inner sep=4pt] at (\i,0) {\event};}
+  \end{tikzpicture}\par}
 \end{frame}
 
 % ---------------------------------------------------------------- 26. takeaway
 \begin{frame}{Takeaway}
-  \ph{TBD}
+  \ph{D}
   \parttag{VI \quad RESULTS}
   \centering
   \vspace{12mm}
@@ -946,7 +1045,7 @@
 % =========================================================== VII. FUTURE WORK
 % ---------------------------------------------------------------- 27. fastMRI data
 \begin{frame}{fastMRI}
-  \ph{TBD}
+  \ph{D}
   \parttag{VII \quad FUTURE WORK}
   \centering
   \vspace{5mm}
@@ -975,7 +1074,7 @@
 
 % ---------------------------------------------------------------- 28. k-space
 \begin{frame}{fastMRI: reconstruction}
-  \ph{TBD}
+  \ph{D}
   \parttag{VII \quad FUTURE WORK}
   \centering
   \vspace{4mm}
@@ -998,7 +1097,7 @@
 
 % ---------------------------------------------------------------- 29. future work
 \begin{frame}{Future work}
-  \ph{TBD}
+  \ph{D}
   \parttag{VII \quad FUTURE WORK}
   \vspace{14mm}
   \begin{itemize}\setlength{\itemsep}{7mm}\large
@@ -1011,7 +1110,7 @@
 % ---------------------------------------------------------------- 30. thank you
 {\setbeamertemplate{background}{}
 \begin{frame}[plain,noframenumbering]
-  \ph{TBD}
+  \ph{D}
   \vfill
   \centering
   {\Large\bfseries Thank you}\\[2mm]
@@ -1030,7 +1129,6 @@
 \appendix
 
 \begin{frame}{Backup: image spectra}
-  \ph{TBD}
   \centering
   \includegraphics[height=0.56\textheight]{spectral/dieleman/cell21.png}
 
@@ -1042,7 +1140,6 @@
 \end{frame}
 
 \begin{frame}{Backup: noise and fine detail}
-  \ph{TBD}
   \centering
   \includegraphics[width=\textwidth]{spectral/fig_noise_schematic.pdf}
 
@@ -1053,7 +1150,6 @@
 \end{frame}
 
 \begin{frame}{Backup: validation-phase submissions}
-  \ph{TBD}
   \centering
   \begin{tikzpicture}[x=1.24cm,y=58cm,font=\scriptsize]
     \foreach \v/\lab in {0.010/0.84,0.030/0.86,0.050/0.88,0.070/0.90,0.090/0.92}{
@@ -1087,9 +1183,9 @@
       {\textbf{+ checkpoint average \& flip TTA}\\\textbf{$+0.0042$, no training}};
     \node[text=ink,anchor=west,inner sep=2pt,font=\scriptsize] at (5.35,0.0455)
       {\textbf{tried on the same data:}};
-    \foreach \y/\lab/\val in {0.0375/{conditional flow matching}/0.8867,
-                              0.0295/{DINOv3 ViT}/0.8789,
-                              0.0215/{LeJEPA tubelet + UNETR}/0.8590,
+    \foreach \y/\lab/\val in {0.0375/{LeJEPA tubelet + UNETR}/0.8893,
+                              0.0295/{conditional flow matching}/0.8867,
+                              0.0215/{DINOv3 ViT}/0.8789,
                               0.0135/{Swin UNETR 3D}/0.8582}{
       \node[text=ink] at (5.5,\y) {$\times$};
       \node[text=ink,anchor=west,font=\tiny,inner sep=2pt] at (5.62,\y) {\lab};
@@ -1098,7 +1194,6 @@
 \end{frame}
 
 \begin{frame}{Backup: top teams' methods}
-  \ph{TBD}
   \footnotesize
   \begin{tabular}{@{}llp{8.4cm}@{}}
     \toprule
