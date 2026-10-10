@@ -1,5 +1,5 @@
 % MRIxFields 2026, Task 3 -- showcase presentation, v0. About 15 minutes, 29 slides, a closing
-% slide and 4 backup.
+% slide and 6 backup.
 % Compile from inside reports/:  ~/anaconda3/envs/tex/bin/tectonic showcase_presentation_v0.tex
 %
 % Conventions
@@ -1147,6 +1147,76 @@
   \gloss{Image (red), Gaussian noise (blue), noisy image (green). Noise is flat in frequency,
   so it covers the weak high-frequency end first.}
   \srcline{Schematic redrawn after Dieleman (2024).}
+\end{frame}
+
+% definitions behind slide 15, step 4: scripts/error_spectrum_analysis.py (slice_measures,
+% figures); shares recomputed from reports/error_spectrum/per_transition.csv, 168 transitions
+\begin{frame}{Backup: error by edge strength, definitions}
+  \centering
+  \includegraphics[width=0.78\textwidth]{spectral/fig_error_by_edge.pdf}
+
+  \vspace{1mm}
+  \raggedright\scriptsize
+  \setlength{\leftmargini}{1.2em}
+  \begin{minipage}[t]{0.53\textwidth}
+    \textbf{a.} Per axial slice:
+    \begin{itemize}\setlength{\itemsep}{0pt}
+      \item edge strength $|\nabla y|$: Sobel gradient magnitude of the target;
+      \item brain pixels (source $> 10^{-3}$) sorted by $|\nabla y|$, cut into 10 equal
+            groups: 1 = flattest 10\%, 10 = sharpest 10\%;
+      \item per-pixel $1-\mathrm{SSIM}$ (7$\times$7 window, as the scorer) summed per group.
+    \end{itemize}
+    Summed over all slices of 168 transitions, per source field; y is each group's share of
+    the total, 10\% if uniform. 0.1\,T, decile 9: 13.1\% of the $1-\mathrm{SSIM}$ on 10\% of
+    the pixels.
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.43\textwidth}
+    \textbf{b.} Three regions per slice, share of pixels:
+    \begin{itemize}\setlength{\itemsep}{0pt}
+      \item outer edge: within 4\,px of the brain boundary, either side, 10.3\%;
+      \item folds: rest of the brain, top 20\% of $|\nabla y|$, 17.9\%;
+      \item flat interior: everything else, 71.7\%.
+    \end{itemize}
+    Enrichment $=$ error share / pixel share; 1 = in proportion to area. Folds, all sources:
+    20.5\% of the $1-\mathrm{SSIM}$ on 17.9\% of the pixels, 1.14.
+  \end{minipage}
+\end{frame}
+
+% coherence behind slide 17, panel b: scripts/spectral_loss_eval.py (spectral_terms), the
+% correlation of prediction and target per frequency ring; numbers: reports/spectral_loss/
+% bands.csv, "gate on (d>0)", 0.10-0.20
+\begin{frame}{Backup: coherence}
+  \centering
+  \vspace{3mm}
+  \begin{tikzpicture}[font=\scriptsize, x=0.4cm, y=0.55cm]
+    \foreach \dx/\shift/\amp/\lab in {0/0/0.7/{$\rho = 1$: weaker, but in the right place},
+                                       15/1.5708/1/{$\rho = 0$: right strength, wrong place}}{
+      \begin{scope}[xshift=\dx*0.4cm]
+        \draw[draw=baseline, line width=0.5pt] (0,0) -- (12.57,0);
+        \draw[draw=ink, line width=0.9pt]
+          plot[domain=0:12.57, samples=120] (\x, {sin(\x r)});
+        \draw[draw=accent, line width=1.1pt, dashed]
+          plot[domain=0:12.57, samples=120] (\x, {\amp*sin((\x + \shift) r)});
+        \node[text=ink, anchor=north] at (6.28,-1.35) {\lab};
+      \end{scope}}
+    \draw[draw=ink, line width=0.9pt] (8.5,2.0) -- (9.7,2.0);
+    \node[text=ink, anchor=west] at (9.8,2.0) {target};
+    \draw[draw=accent, line width=1.1pt, dashed] (13.5,2.0) -- (14.7,2.0);
+    \node[text=accent, anchor=west] at (14.8,2.0) {prediction};
+  \end{tikzpicture}
+
+  \vspace{6mm}
+  \raggedright\small
+  \setlength{\leftmargini}{1.2em}
+  \begin{itemize}\setlength{\itemsep}{3pt}
+    \item Coherence, per frequency band: the correlation of prediction and target, keeping only
+          that band. 1 = the same detail in the same place.
+    \item Power (panel a) asks how much detail there is; coherence (panel b) asks whether it is
+          in the right place.
+    \item Spectral term, 0.1--0.2 cycles/pixel: power 0.743 $\to$ 0.882 of the target's,
+          coherence 0.833 $\to$ 0.822. The added detail is not where the target's is, so the
+          error rose with it: 0.307 $\to$ 0.339.
+  \end{itemize}
 \end{frame}
 
 \begin{frame}{Backup: validation-phase submissions}
